@@ -15,5 +15,3 @@ The quantitative analysis of clinical trials and their outcome provides a deeper
 | Prediction of outcome probability based on clinical trial characteristics                   | 02.07.2025    |
 | Testing outcome prediction through ClinicalTrials.gov                                       | 15.07.2025    |
 | Completion                                                                                  | 10.09.2025    |
-
-
