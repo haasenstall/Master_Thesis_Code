@@ -1,3 +1,432 @@
 """
 scraping the data from vivli, csdr and yoda for focal publications
 """
+
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+from tqdm import tqdm
+from datetime import datetime
+import os
+import re
+import time
+import random
+import json
+from PyPDF2 import PdfReader
+
+def get_vivli_data():
+    """
+    Scrape data from Vivli platform
+    data requested from the Vivli platform
+
+    data structure:
+        {
+        request_id: str,
+        lead_investigator: str,
+        lead_institution: str,
+        study_title: str,
+        link: str,
+        stduy_id: str,
+        number_of_studies: int
+        }
+    """
+    url = "https://vivli.org/approved-research-proposals/"
+    
+    data = []  # Initialize as a list instead of a dictionary
+
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch data from Vivli. Status code: {response.status_code}")
+    
+    soup = BeautifulSoup(response.content, 'html.parser')
+    for row in soup.find_all('tr'):
+        row_data = {}
+        
+        # request id
+        request_id = row.find('td', class_='column-1')
+        if request_id:
+            row_data['request_id'] = request_id.text.strip()
+        
+        # lead investigator
+        lead_investigator = row.find('td', class_='column-2')
+        if lead_investigator:
+            row_data['lead_investigator'] = lead_investigator.text
+        
+        # lead institution
+        lead_institution = row.find('td', class_='column-3')
+        if lead_institution:
+            row_data['lead_institution'] = lead_institution.text.strip()
+        
+        # study title and link
+        title_cell = row.find('td', class_='column-4')
+        if title_cell:
+            link_tag = title_cell.find('a')
+            if link_tag:
+                # Extract the title text
+                row_data['study_title'] = link_tag.text.strip()
+                
+                # Extract the href attribute
+                if 'href' in link_tag.attrs:
+                    row_data['link'] = link_tag['href']
+                    
+                    # Get study_id only if link exists
+                    try:
+                        study_id = vivli_nct_grapper(link_tag['href'])
+                        row_data['study_id'] = study_id
+                        row_data['number_of_studies'] = len(study_id) if study_id else 0
+                    except Exception as e:
+                        print(f"Error getting NCT IDs for {link_tag['href']}: {e}")
+                        row_data['study_id'] = []
+                        row_data['number_of_studies'] = 0
+                else:
+                    row_data['link'] = ""
+                    row_data['study_id'] = []
+                    row_data['number_of_studies'] = 0
+        
+        # Append the row data to the main data list
+        if row_data:
+            data.append(row_data)
+
+    return data
+
+def vivli_nct_grapper(link):
+    """
+    Extract NCT IDs from the provided Link on Vivli
+    """
+    url = link
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch data from Vivli. Status code: {response.status_code}")
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    NCT_IDs = []
+    for p in soup.find_all('p'):
+        for span in p.find_all('span'):
+            if 'NCT' in span.text:
+                nct_id = span.text.strip()
+                # Check if the text matches the NCT ID format
+                if re.match(r'NCT\d{8}', nct_id):
+                    NCT_IDs.append(nct_id)
+                elif len(nct_id) < 10:
+                    # If the NCT ID is too short, it might be a part of a longer string over two lines
+                    next_span = span.find_next('span')
+                    if re.match(r'NCT\d{8}', nct_id + next_span.text.strip()):
+                        NCT_IDs.append(nct_id + next_span.text.strip())
+                
+                    
+    return NCT_IDs
+
+def get_csdr_data():
+    """
+    Scrape data from CSDR platform
+    data requested from the CSDR platform
+
+    data structure:
+        {
+        request_id: str,
+        lead_investigator: str,
+        lead_institution: str,
+        study_title: str,
+        link: str,
+        stduy_id: str,
+        number_of_studies: int
+        }
+    
+    """  
+    url = "https://www.clinicalstudydatarequest.com/Metrics/Agreed-Proposals.aspx"
+
+    data = []
+    
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch data from CSDR. Status code: {response.status_code}")
+    
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    # Find the table containing the data
+    table = soup.find('table', {'id': 'proposals-table'})
+    if not table:
+        raise Exception("Failed to find the proposals table on CSDR page.")
+    
+    tbody = table.find('tbody')
+    if not tbody:
+        raise Exception("Failed to find the table body in the proposals table on CSDR page.")
+    
+    # Iterate through each row in the table
+    for row in tbody.find_all('tr'):
+        row_data = {}
+        counter = 0
+        for cell in row.find_all('td'):
+            if counter == 0:
+                # Request ID
+                row_data['request_id'] = cell.text.strip()
+            elif counter == 1:
+                # Sponsor
+                row_data['sponsor'] = cell.text.strip()
+            elif counter == 2:
+                # title
+                row_data['study_title'] = cell.text.strip()
+            elif counter == 3:
+                # lead_institution
+                row_data['lead_institution'] = cell.text.strip()
+            elif counter == 4:
+                # Lead Researcher
+                row_data['lead_researcher'] = cell.text.strip()
+            elif counter == 5:
+                # Link
+                link_tag = cell.find('a', href=True)
+                row_data['link'] = link_tag['href']
+                # parsing link, because starts with ..
+                if row_data['link'].startswith('../'):
+                    row_data['link'] = 'https://www.clinicalstudydatarequest.com' + row_data['link'][2:]
+                    #print(f"Updated link: {row_data['link']}")
+                # get study_id from link
+                study_id = csdr_ID_grapper(row_data['link']) 
+                
+                row_data['study_id'] = study_id
+                row_data['number_of_studies'] = len(study_id) if study_id else 0
+            
+            counter += 1
+        # Append the row data to the main data list
+        if row_data:
+            data.append(row_data)
+    if not data:
+        raise Exception("No data found in the CSDR page.")
+    
+    return data
+
+def csdr_ID_grapper(link):
+    """
+    Extract the study ID from the provided Link from CSDR
+    """
+    response = requests.get(link)
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch data from CSDR. Status code: {response.status_code}")
+    
+    soup = BeautifulSoup(response.content, 'html.parser')
+
+    # table with different study IDs
+    study_ids = []
+
+    study_id_container = soup.find('div', {'id': 'MainContentPlaceHolder_PostingForm_PROPOSAL_SUMMARY_SUBMISSION_POSTINGS', 'class': 'MultiLineText'})
+
+    if not study_id_container:
+        raise Exception("Failed to find the study ID container on CSDR page.")
+    #print("Pre Process Div")
+    # iterate through the container in the div
+    divs = study_id_container.find_all('div', {'class': 'posting'})
+    for a in divs.find('a', href=True):
+        print(f"Processing div")
+        conatiner = a
+        nct_link = "https://www.clinicalstudydatarequest.com" + conatiner['href'] if conatiner else None
+        
+        alternate_id = conatiner.text.strip() if conatiner else None
+
+        # new page for NCT ID
+        if nct_link:
+            nct_response = requests.get(nct_link)
+            
+            if nct_response.status_code != 200:
+                raise Exception(f"Failed to fetch data from CSDR NCT link. Status code: {nct_response.status_code}")
+            
+            nct_soup = BeautifulSoup(nct_response.content, 'html.parser')
+            
+            table = nct_soup.find('table')
+            for row in table.find_all('tr'):
+                for cell in row.find_all('td'):
+                    nct_id = cell.find('div', {'id': 'MainContentPlaceHolder_PostingForm_CLINICAL_TRIAL_ID'})
+                    nct_id = nct_id.text.strip() if nct_id else None
+                    if nct_id and re.match(r'NCT\d{8}', nct_id):
+                        study_ids.append(nct_id)
+                    else:
+                        study_ids.append(alternate_id)
+    print(f"Found {len(study_ids)} study IDs in the CSDR page.")
+    return study_ids
+
+def get_yoda_data():
+    """
+    Scrape data from YODA platform
+    data requested from the YODA platform
+
+    data structure:
+        {
+        request_id: str,
+        lead_investigator: str,
+        lead_institution: str,
+        study_title: str,
+        link: str,
+        stduy_id: str,
+        number_of_studies: int
+        }
+    
+    """
+    data = []
+
+    for page in range(1, 51):
+        # depending on page count
+        url = f"https://yoda.yale.edu/metrics/submitted-requests-to-use-johnson-johnson-data/data-requests-johnson-and-johnson/?_paged={page}"
+        
+        response = requests.get(url)
+        
+        if response.status_code != 200:
+            print(f"Failed to fetch data from YODA page {page}. Status code: {response.status_code}")
+            continue
+        
+        soup = BeautifulSoup(response.content, 'html.parser')
+
+        # define the class pattern for request items
+        class_pattern = [
+            'request-item flex-container flex-wrap step-approved_pending_dua_signature',
+            'request-item flex-container flex-wrap step-concluded',
+            'request-item flex-container flex-wrap step-in_progess',
+            'request-item flex-container flex-wrap step-ongoing',
+            'request-item flex-container flex-wrap step-published',           
+            'request-item flex-container flex-wrap step-submitted_for_yoda_project_review',
+            'request-item flex-container flex-wrap step-unknown_revoked'
+        ]
+        requests_items = []
+        # Find all request items
+        for pattern in class_pattern:
+            items = soup.find_all('div', {'class': pattern})
+            requests_items.extend(items)
+        if not requests_items:
+            print(f"No request items found on page {page}.")
+            continue
+
+
+        for item in requests_items:
+            request_data = {}
+            
+            # Extract from left cell
+            left_cell = item.find('div', {'class': 'left-cell'})
+            if left_cell:
+                # Extract request ID
+                project_number = left_cell.find('span', {'class': 'yoda-caption dark-caption project-number'})
+                if project_number:
+                    request_data['request_ID'] = project_number.text.strip()
+                
+                # Extract number of trials provided - also in left-cell
+                trials_provided = left_cell.find('span', {'class': 'yoda-caption request-item__caption'}, string=lambda text: text and 'No. Trials Provided' in text)
+                if trials_provided:
+                    num_trials = trials_provided.find_next('span', {'class': 'yoda-caption dark-caption'})
+                    if num_trials:
+                        request_data['number_of_trial_provided'] = num_trials.text.strip()
+            
+            # Extract from right cell
+            right_cell = item.find('div', {'class': 'right-cell'})
+            if right_cell:
+                # extract lead investigator
+                lead = right_cell.find('span', {'class': 'yoda-caption dark-caption font-700'})
+                if lead:
+                    request_data['lead_investigator'] = lead.text.strip()
+
+                # extract lead institution
+                institute = right_cell.find('span', {'class': 'yoda-caption'})
+                if institute and not institute.find_parent('h4'):  # Avoid getting caption labels
+                    request_data['lead_institution'] = institute.text.strip()
+
+                # extract study title
+                title = right_cell.find('h3', {'class': 'request-item__title color-blue display-block'})
+                if title:
+                    request_data['title'] = title.text.strip()
+
+                # extract link (PDF link)
+                pdf_link = right_cell.find('div', {'class': 'flex-container flex-wrap project-docs-ctas'})
+                if pdf_link:
+                    pdf_links = pdf_link.find_all('a', href=True)
+                    for link in pdf_links:
+                        if 'due' in link['href'].lower():
+                            request_data['PDF_Link'] = link['href']
+                            break
+
+                # Extract study ID from the PDF link
+                if link['href']:
+                    try:
+                        study_ids = yoda_nct_grapper(link['href'])
+                        request_data['study_id'] = study_ids
+                        request_data['number_of_studies'] = len(study_ids) if study_ids else 0
+                    except Exception as e:
+                        print(f"Error getting NCT IDs for {link['href']}: {e}")
+                        request_data['study_id'] = []
+                        request_data['number_of_studies'] = 0
+
+            # Append the request data to the main data list
+            if request_data:
+                data.append(request_data)
+
+    return data
+
+def yoda_nct_grapper(link):
+    """
+    Function to extract the NCT IDs from the PDF Request Reports
+    for multiple requests
+    """
+    nct_ids = []
+
+    pdf_link = link
+    response = requests.get(pdf_link)
+
+    if response.status_code != 200:
+        raise Exception(f"Failed to fetch PDF from YODA. Status code: {response.status_code}")
+    
+    with open('temp.pdf', 'wb') as f:
+        f.write(response.content)
+    
+    pdf_reader = PdfReader('temp.pdf')
+
+    for page in pdf_reader.pages:
+        text = page.extract_text()
+        if text:
+            # Find all NCT IDs in the text
+            found_ids = re.findall(r'NCT\d{8}', text)
+            nct_ids.extend(found_ids)
+
+    # Remove duplicates
+    nct_ids = list(set(nct_ids))
+    # Clean up the temporary file
+    os.remove('temp.pdf')
+
+    return nct_ids
+
+def main():
+    """
+    Main function to run the scrapers
+    """
+    #vivli_data = get_vivli_data()
+    csdr_data = get_csdr_data()
+    #yoda_data = get_yoda_data()
+
+    # Save the data as json file
+    # Use the correct absolute path to your data directory
+    output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "01_data")
+    
+    # Create the directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
+    
+    #vivli_file_path = os.path.join(output_dir, "vivli_data.json")
+    #with open(vivli_file_path, 'w') as f:
+    #    json.dump(vivli_data, f, indent=4)
+
+    csdr_file_path = os.path.join(output_dir, "csdr_data.json")
+    with open(csdr_file_path, 'w') as f:
+        json.dump(csdr_data, f, indent=4)
+    #yoda_file_path = os.path.join(output_dir, "yoda_data.json")
+    #with open(yoda_file_path, 'w') as f:
+    #    json.dump(yoda_data, f, indent=4)
+
+    #print(f"Vivli data saved to {vivli_file_path}")
+    #print(f"CSDR data saved to {csdr_file_path}")
+    #print(f"YODA data saved to {yoda_file_path}")
+
+    # Print the number of studies scraped
+    #print(f"Number of studies scraped from Vivli: {len(vivli_data)}")
+    print(f"Number of studies scraped from CSDR: {len(csdr_data)}")
+    #print(f"Number of studies scraped from YODA: {len(yoda_data)}")
+
+    #print(f"Total number of studies scraped: {len(vivli_data) + len(csdr_data) + len(yoda_data)}")
+
+
+if __name__ == "__main__":
+    print("Starting the scraping process...")
+    main()
+    print("Scraping completed.")
