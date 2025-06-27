@@ -13,6 +13,8 @@ import time
 import random
 import json
 from PyPDF2 import PdfReader
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
 def get_vivli_data():
     """
@@ -199,49 +201,81 @@ def csdr_ID_grapper(link):
     """
     Extract the study ID from the provided Link from CSDR
     """
-    response = requests.get(link)
-    if response.status_code != 200:
-        raise Exception(f"Failed to fetch data from CSDR. Status code: {response.status_code}")
+    # Set up headless Chrome
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920x1080")
     
-    soup = BeautifulSoup(response.content, 'html.parser')
+    # Start browser
+    driver = webdriver.Chrome(options=options)
+    driver.get(link)
+    
+    # Wait for JS to load (adjust if needed)
+    time.sleep(0.5)
 
-    # table with different study IDs
+    # Get page source and parse it
+    soup = BeautifulSoup(driver.page_source, 'html.parser')
+    driver.quit()
+
     study_ids = []
-
-    study_id_container = soup.find('div', {'id': 'MainContentPlaceHolder_PostingForm_PROPOSAL_SUMMARY_SUBMISSION_POSTINGS', 'class': 'MultiLineText'})
-
-    if not study_id_container:
-        raise Exception("Failed to find the study ID container on CSDR page.")
-    #print("Pre Process Div")
-    # iterate through the container in the div
-    divs = study_id_container.find_all('div', {'class': 'posting'})
-    for a in divs.find('a', href=True):
-        print(f"Processing div")
-        conatiner = a
-        nct_link = "https://www.clinicalstudydatarequest.com" + conatiner['href'] if conatiner else None
+    
+    # Find all elements that contain study IDS
+    for posting in soup.find_all('div', {'class': 'posting'}):
+        # print(f"Processing posting")
+        a_tag = posting.find('a', href=True)
+        if a_tag:
+            study_id = a_tag.get_text(strip=True)
+            study_link = a_tag['href']
         
-        alternate_id = conatiner.text.strip() if conatiner else None
-
-        # new page for NCT ID
-        if nct_link:
-            nct_response = requests.get(nct_link)
-            
-            if nct_response.status_code != 200:
-                raise Exception(f"Failed to fetch data from CSDR NCT link. Status code: {nct_response.status_code}")
-            
-            nct_soup = BeautifulSoup(nct_response.content, 'html.parser')
-            
-            table = nct_soup.find('table')
-            for row in table.find_all('tr'):
-                for cell in row.find_all('td'):
-                    nct_id = cell.find('div', {'id': 'MainContentPlaceHolder_PostingForm_CLINICAL_TRIAL_ID'})
-                    nct_id = nct_id.text.strip() if nct_id else None
-                    if nct_id and re.match(r'NCT\d{8}', nct_id):
-                        study_ids.append(nct_id)
-                    else:
-                        study_ids.append(alternate_id)
-    print(f"Found {len(study_ids)} study IDs in the CSDR page.")
+        # Check if there is a NCT ID
+        nct_id = csdr_nct_grapper(study_link)
+        if nct_id != []:
+            #print(f"NCT ID found: {nct_id}")
+            study_id = nct_id
+        
+        
+        if study_id:
+            study_ids.append(study_id)
+                
     return study_ids
+
+def csdr_nct_grapper(link):
+    """
+    Extract the NCT ID from the provided link
+    """
+    url = "https://www.clinicalstudydatarequest.com" + link
+
+     # Set up headless Chrome
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--window-size=1920x1080")
+    
+    # Start browser
+    driver = webdriver.Chrome(options=options)
+    driver.get(url)
+    
+    # Wait for JS to load (adjust if needed)
+    time.sleep(0.5)
+
+    # Get page source and parse it
+    soup = BeautifulSoup(driver.page_source, 'html.parser')
+    driver.quit()
+
+    
+    # Find the element that contains the NCT ID
+    nct_id = soup.find('div', {'id': 'MainContentPlaceHolder_PostingForm_CLINICAL_TRIAL_ID'})
+    if nct_id:
+        nct_id_text = nct_id.text.strip()
+        #print(f"NCT ID found: {nct_id_text}")
+        # Check if the text matches the NCT ID format
+        if re.match(r'NCT\d{8}', nct_id_text):
+            return nct_id_text
+        else:
+            # If the NCT ID is not in the expected format, return an empty list
+            return []
+
 
 def get_yoda_data():
     """
