@@ -105,19 +105,27 @@ def vivli_nct_grapper(link):
 
     NCT_IDs = []
     for p in soup.find_all('p'):
-        for span in p.find_all('span'):
-            if 'NCT' in span.text:
-                nct_id = span.text.strip()
-                # Check if the text matches the NCT ID format
-                if re.match(r'NCT\d{8}', nct_id):
-                    NCT_IDs.append(nct_id)
-                elif len(nct_id) < 10:
-                    # If the NCT ID is too short, it might be a part of a longer string over two lines
+        # Find all NCT IDs in the text
+        found_ids = re.findall(r'NCT\d{8}', p.text)
+        if found_ids:
+            NCT_IDs.extend(found_ids)
+        
+        if 'span' in p.text:
+            # cheeck for span tags
+            span_tags = p.find_all('span')
+            for span in span_tags:
+                # Find all NCT IDs in the text
+                if r'NCT\d{8}' in span.text:
+                    found_ids = re.findall(r'NCT\d{8}', span.text)
+                    if found_ids:
+                        NCT_IDs.extend(found_ids)
+                elif 'NCT' in span.text:
+                    found_id = span.text.split()
                     next_span = span.find_next('span')
-                    if re.match(r'NCT\d{8}', nct_id + next_span.text.strip()):
-                        NCT_IDs.append(nct_id + next_span.text.strip())
-                
-                    
+                    if next_span and 'NCT' in next_span.text:
+                        found_id.append(next_span.text)
+                        if re.match(r'NCT\d{8}', found_id[-1]):
+                            NCT_IDs.extend(found_id)
     return NCT_IDs
 
 def get_csdr_data():
