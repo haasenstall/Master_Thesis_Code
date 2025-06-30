@@ -89,6 +89,8 @@ def get_vivli_data():
         if row_data:
             data.append(row_data)
 
+        
+
     return data
 
 def vivli_nct_grapper(link):
@@ -162,6 +164,16 @@ def get_csdr_data():
             if counter == 0:
                 # Request ID
                 row_data['request_id'] = cell.text.strip()
+                # check request id already in CSDR file
+                load_data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "01_data", "csdr_data.json")
+                if os.path.exists(load_data_path):
+                    with open(load_data_path, 'r') as f:
+                        existing_data = json.load(f)
+                    # check if request_id already exists
+                    if any(d['request_id'] == row_data['request_id'] for d in existing_data):
+                        print(f"Request ID {row_data['request_id']} already exists in the CSDR data file. Skipping.")
+                        row_data = {}  # Reset row_data to skip this row
+                        break  # Skip to the next row
             elif counter == 1:
                 # Sponsor
                 row_data['sponsor'] = cell.text.strip()
@@ -192,8 +204,21 @@ def get_csdr_data():
         # Append the row data to the main data list
         if row_data:
             data.append(row_data)
+
+        # save progressb every 5 rows
+        if len(data) % 5 == 0:
+            print(f"Progress: {len(data)} rows scraped so far.")
+            # attach data to a json file
+            output_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "01_data")
+            os.makedirs(output_dir, exist_ok=True)
+            csdr_file_path = os.path.join(output_dir, "csdr_data.json")
+            with open(csdr_file_path, 'w') as f:
+                json.dump(data, f, indent=4)
+
     if not data:
         raise Exception("No data found in the CSDR page.")
+    
+
     
     return data
 
