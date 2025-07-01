@@ -27,6 +27,7 @@ def get_vivli_data():
         lead_investigator: str,
         lead_institution: str,
         study_title: str,
+        year: str,
         link: str,
         stduy_id: str,
         number_of_studies: int
@@ -73,15 +74,18 @@ def get_vivli_data():
                     
                     # Get study_id only if link exists
                     try:
-                        study_id = vivli_nct_grapper(link_tag['href'])
+                        study_id, year = vivli_nct_grapper(link_tag['href'])
+                        row_data['year'] = year if year else "Unknown"
                         row_data['study_id'] = study_id
                         row_data['number_of_studies'] = len(study_id) if study_id else 0
                     except Exception as e:
-                        print(f"Error getting NCT IDs for {link_tag['href']}: {e}")
+                        #print(f"Error getting NCT IDs for {link_tag['href']}: {e}")
+                        row_data['year'] = "Unknown"
                         row_data['study_id'] = []
                         row_data['number_of_studies'] = 0
                 else:
                     row_data['link'] = ""
+                    row_data['year'] = "Unknown"
                     row_data['study_id'] = []
                     row_data['number_of_studies'] = 0
         
@@ -95,7 +99,7 @@ def get_vivli_data():
 
 def vivli_nct_grapper(link):
     """
-    Extract NCT IDs from the provided Link on Vivli
+    Extract NCT IDs and publication year from the provided Link on Vivli
     """
     url = link
     response = requests.get(url)
@@ -110,23 +114,57 @@ def vivli_nct_grapper(link):
         if found_ids:
             NCT_IDs.extend(found_ids)
         
-        if 'span' in p.text:
-            # cheeck for span tags
-            span_tags = p.find_all('span')
+        # Check for span tags - improved version
+        span_tags = p.find_all('span')
+        if span_tags:  # Only proceed if span tags are found
             for span in span_tags:
-                # Find all NCT IDs in the text
-                if r'NCT\d{8}' in span.text:
-                    found_ids = re.findall(r'NCT\d{8}', span.text)
-                    if found_ids:
-                        NCT_IDs.extend(found_ids)
-                elif 'NCT' in span.text:
-                    found_id = span.text.split()
+                # Directly use regex to find NCT IDs in the span text
+                found_ids = re.findall(r'NCT\d{8}', span.text)
+                if found_ids:
+                    NCT_IDs.extend(found_ids)
+                # Handle potential fragmented NCT IDs across spans
+                elif 'NCT' in span.text and not re.findall(r'NCT\d{8}', span.text):
+                    # The span contains "NCT" but not a complete NCT ID
                     next_span = span.find_next('span')
-                    if next_span and 'NCT' in next_span.text:
-                        found_id.append(next_span.text)
-                        if re.match(r'NCT\d{8}', found_id[-1]):
-                            NCT_IDs.extend(found_id)
-    return NCT_IDs
+                    if next_span:
+                        # Check if combining current and next span creates a valid NCT ID
+                        combined_text = span.text.strip() + next_span.text.strip()
+                        combined_ids = re.findall(r'NCT\d{8}', combined_text)
+                        if combined_ids:
+                            NCT_IDs.extend(combined_ids)
+
+    # Extract year from JSON-LD script
+    year = None
+    script_tag = soup.find('script', {'type': 'application/ld+json', 'class': 'yoast-schema-graph'})
+    if script_tag:
+        try:
+            # Parse the JSON content
+            json_data = json.loads(script_tag.string)
+            
+            # Try to find datePublished in the JSON data
+            # Look through the graph items for WebPage type
+            for item in json_data.get('@graph', []):
+                if item.get('@type') == 'WebPage':
+                    if 'datePublished' in item:
+                        # Extract year from ISO date format (YYYY-MM-DD)
+                        date_published = item['datePublished']
+                        year = date_published.split('-')[0]  # Get year part
+                        break
+                    elif 'dateModified' in item:
+                        # Fallback to modified date if published isn't available
+                        date_modified = item['dateModified']
+                        year = date_modified.split('-')[0]  # Get year part
+                        break
+        except (json.JSONDecodeError, KeyError, IndexError) as e:
+            print(f"Error extracting year from JSON-LD: {e}")
+    
+    # If no year found in JSON-LD, try to find it in other metadata
+    if not year:
+        meta_date = soup.find('meta', {'property': 'article:published_time'})
+        if meta_date and 'content' in meta_date.attrs:
+            year = meta_date['content'].split('-')[0]
+    
+    return NCT_IDs, year
 
 def get_csdr_data():
     """
@@ -139,6 +177,7 @@ def get_csdr_data():
         lead_investigator: str,
         lead_institution: str,
         study_title: str,
+        year: str,
         link: str,
         stduy_id: str,
         number_of_studies: int
@@ -203,8 +242,9 @@ def get_csdr_data():
                     row_data['link'] = 'https://www.clinicalstudydatarequest.com' + row_data['link'][2:]
                     #print(f"Updated link: {row_data['link']}")
                 # get study_id from link
-                study_id = csdr_ID_grapper(row_data['link']) 
+                study_id, year = csdr_ID_grapper(row_data['link']) 
                 
+                row_data['year'] = year if year else "Unknown"
                 row_data['study_id'] = study_id
                 row_data['number_of_studies'] = len(study_id) if study_id else 0
             
@@ -271,7 +311,23 @@ def csdr_ID_grapper(link):
         if study_id:
             study_ids.append(study_id)
                 
-    return study_ids
+    # Extract year from the data sharing date field
+    date_div = soup.find('div', {'id': 'MainContentPlaceHolder_PostingForm_PROPOSAL_SUMMARY_DATE_DATA_SHARING'})
+    if date_div:
+        date_text = date_div.text.strip()
+        # Extract year from date text (assuming format like "26 November 2013")
+        date_parts = date_text.split()
+        if len(date_parts) >= 3:
+            try:
+                year = date_parts[-1]  # Get the last part which should be the year
+                # Validate it's a 4-digit year
+                if len(year) == 4 and year.isdigit():
+                    print(f"Found year: {year}")
+                else:
+                    year = None
+            except:
+                year = None
+    return study_ids, year
 
 def csdr_nct_grapper(link):
     """
@@ -321,6 +377,7 @@ def get_yoda_data():
         lead_investigator: str,
         lead_institution: str,
         study_title: str,
+        year: str,
         link: str,
         stduy_id: str,
         number_of_studies: int
@@ -370,7 +427,8 @@ def get_yoda_data():
                 # Extract request ID
                 project_number = left_cell.find('span', {'class': 'yoda-caption dark-caption project-number'})
                 if project_number:
-                    request_data['request_ID'] = project_number.text.strip()
+                    request_data['request_id'] = project_number.text.strip()
+                    request_data['year'] = project_number.text.strip().split('-')[0]  # Extract year from request ID
                 
                 # Extract number of trials provided - also in left-cell
                 trials_provided = left_cell.find('span', {'class': 'yoda-caption request-item__caption'}, string=lambda text: text and 'No. Trials Provided' in text)
@@ -459,9 +517,9 @@ def main():
     """
     Main function to run the scrapers
     """
-    #vivli_data = get_vivli_data()
+    vivli_data = get_vivli_data()
     csdr_data = get_csdr_data()
-    #yoda_data = get_yoda_data()
+    yoda_data = get_yoda_data()
 
     # Save the data as json file
     # Use the correct absolute path to your data directory
@@ -470,27 +528,27 @@ def main():
     # Create the directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
-    #vivli_file_path = os.path.join(output_dir, "vivli_data.json")
-    #with open(vivli_file_path, 'w') as f:
-    #    json.dump(vivli_data, f, indent=4)
+    vivli_file_path = os.path.join(output_dir, "vivli_data.json")
+    with open(vivli_file_path, 'w') as f:
+        json.dump(vivli_data, f, indent=4)
 
     csdr_file_path = os.path.join(output_dir, "csdr_data.json")
     with open(csdr_file_path, 'w') as f:
         json.dump(csdr_data, f, indent=4)
-    #yoda_file_path = os.path.join(output_dir, "yoda_data.json")
-    #with open(yoda_file_path, 'w') as f:
-    #    json.dump(yoda_data, f, indent=4)
+    yoda_file_path = os.path.join(output_dir, "yoda_data.json")
+    with open(yoda_file_path, 'w') as f:
+        json.dump(yoda_data, f, indent=4)
 
-    #print(f"Vivli data saved to {vivli_file_path}")
-    #print(f"CSDR data saved to {csdr_file_path}")
-    #print(f"YODA data saved to {yoda_file_path}")
-
+    print(f"Vivli data saved to {vivli_file_path}")
+    print(f"CSDR data saved to {csdr_file_path}")
+    print(f"YODA data saved to {yoda_file_path}")
+    
     # Print the number of studies scraped
-    #print(f"Number of studies scraped from Vivli: {len(vivli_data)}")
+    print(f"Number of studies scraped from Vivli: {len(vivli_data)}")
     print(f"Number of studies scraped from CSDR: {len(csdr_data)}")
-    #print(f"Number of studies scraped from YODA: {len(yoda_data)}")
+    print(f"Number of studies scraped from YODA: {len(yoda_data)}")
 
-    #print(f"Total number of studies scraped: {len(vivli_data) + len(csdr_data) + len(yoda_data)}")
+    print(f"Total number of studies scraped: {len(vivli_data) + len(csdr_data) + len(yoda_data)}")
 
 
 if __name__ == "__main__":

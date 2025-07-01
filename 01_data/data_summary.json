@@ -1,0 +1,30 @@
+[
+    {
+        "source_name": "CSDR",
+        "number_of_studies": 391,
+        "number_of_requests": 391,
+        "number_of_study_ids": 3151,
+        "number_of_nct_ids": 2290
+    },
+    {
+        "source_name": "Vivli",
+        "number_of_studies": 659,
+        "number_of_requests": 696,
+        "number_of_study_ids": 18,
+        "number_of_nct_ids": 18
+    },
+    {
+        "source_name": "YODA",
+        "number_of_studies": 435,
+        "number_of_requests": 0,
+        "number_of_study_ids": 2889,
+        "number_of_nct_ids": 2889
+    },
+    {
+        "source_name": "Total",
+        "number_of_studies": 1485,
+        "number_of_requests": 1087,
+        "number_of_study_ids": 6058,
+        "number_of_nct_ids": 5197
+    }
+]

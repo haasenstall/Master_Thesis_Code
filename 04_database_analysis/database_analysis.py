@@ -23,27 +23,100 @@ def save_data(file_path, data):
         json.dump(data, f, indent=4)
     print(f"Data saved to {file_path}")
 
-def analyze_data(data):
+def analyze_data(data, name):
     """
-    Analyze data on quantative aspects to creat a data summary.
+    Analyze data on quantitative aspects to create a data summary.
     """
+    summary = []
+    num_requests = 0
+    num_study_ids = 0
+    num_nct_ids = 0
+
+    for item in data:
+        # Count requests - handle comma-separated values
+        request = item.get('request_id', '')
+        if request:
+            if ',' in request:
+                # Split by comma and count each request ID
+                request_ids = [r.strip() for r in request.split(',') if r.strip()]
+                num_requests += len(request_ids)
+            else:
+                # Single request ID
+                num_requests += 1
+
+        # Count study IDs
+        study_id = item.get('study_id', [])
+        
+        # Handle study_id based on its type
+        if isinstance(study_id, list):
+            num_study_ids += len(study_id)
+            
+            # Count NCT IDs in list
+            for sid in study_id:
+                if isinstance(sid, str) and sid.startswith('NCT'):
+                    num_nct_ids += 1
+                    
+        elif isinstance(study_id, str):
+            # Handle string study_id
+            if ',' in study_id:
+                # Multiple IDs separated by commas
+                ids = [s.strip() for s in study_id.split(',') if s.strip()]
+                num_study_ids += len(ids)
+                
+                # Count NCT IDs
+                for sid in ids:
+                    if sid.startswith('NCT'):
+                        num_nct_ids += 1
+            else:
+                # Single ID
+                num_study_ids += 1
+                if study_id.startswith('NCT'):
+                    num_nct_ids += 1
+
+    # Create summary
+    summary = {
+        'source_name': name,
+        'number_of_studies': len(data),
+        'number_of_requests': num_requests,
+        'number_of_study_ids': num_study_ids,
+        'number_of_nct_ids': num_nct_ids
+    }
     
     return summary
 
 def parse_nct_id(data):
     """
-    check if NCT ID is in the right format.
-    Important - there is study id and nct id, so not deleting the the string if its not a NCT ID.
+    Check if NCT ID is in the right format and fix if necessary.
     """
-
     for item in data:
-        if 'study_id' in item and 'NCT' in item['study_id']:
-            for id in item['study_id'].split(','):
-                if id.startswith('NCT'):
-                    if not re.match(r'^NCT\d{8}$', id.strip()):
-                        # NCT ID invalid and need to be cut 
-                        id = id.strip()[:11]
-                    
+        if 'study_id' in item:
+            # Handle case where study_id is a list
+            if isinstance(item['study_id'], list):
+                for i, sid in enumerate(item['study_id']):
+                    if isinstance(sid, str) and sid.startswith('NCT'):
+                        if not re.match(r'^NCT\d{8}$', sid):
+                            # Fix invalid NCT ID
+                            item['study_id'][i] = sid[:11]
+            
+            # Handle case where study_id is a string
+            elif isinstance(item['study_id'], str) and 'NCT' in item['study_id']:
+                # Process comma-separated IDs
+                if ',' in item['study_id']:
+                    ids = []
+                    for sid in item['study_id'].split(','):
+                        sid = sid.strip()
+                        if sid.startswith('NCT'):
+                            if not re.match(r'^NCT\d{8}$', sid):
+                                sid = sid[:11]  # Fix invalid NCT ID
+                        ids.append(sid)
+                    item['study_id'] = ','.join(ids)
+                else:
+                    # Single ID
+                    if item['study_id'].startswith('NCT') and not re.match(r'^NCT\d{8}$', item['study_id']):
+                        item['study_id'] = item['study_id'][:11]
+    
+    return data  # Return the modified data
+
 def main():
     # file paths
     csdr_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "01_data", "csdr_data.json")
@@ -67,11 +140,11 @@ def main():
     total_data.extend(yoda_data)
 
     # analyze data
-    csdr_summary = analyze_data(csdr_data)
-    vivli_summary = analyze_data(vivli_data)
-    yoda_summary = analyze_data(yoda_data)
+    csdr_summary = analyze_data(csdr_data, "CSDR")
+    vivli_summary = analyze_data(vivli_data, "Vivli")
+    yoda_summary = analyze_data(yoda_data, "YODA")
 
-    total_summary = analyze_data(total_data)
+    total_summary = analyze_data(total_data, "Total")
 
     # save summaries to one file
     summary = []
