@@ -31,6 +31,8 @@ def analyze_data(data, name):
     num_requests = 0
     num_study_ids = 0
     num_nct_ids = 0
+    unique_study_ids = set()
+    unique_nct_ids = set()
 
     for item in data:
         # Count requests - handle comma-separated values
@@ -47,14 +49,16 @@ def analyze_data(data, name):
         # Count study IDs
         study_id = item.get('study_id', [])
         
+        
         # Handle study_id based on its type
         if isinstance(study_id, list):
             num_study_ids += len(study_id)
-            
             # Count NCT IDs in list
             for sid in study_id:
+                unique_study_ids.add(sid)
                 if isinstance(sid, str) and sid.startswith('NCT'):
                     num_nct_ids += 1
+                    unique_nct_ids.add(sid)
                     
         elif isinstance(study_id, str):
             # Handle string study_id
@@ -62,16 +66,20 @@ def analyze_data(data, name):
                 # Multiple IDs separated by commas
                 ids = [s.strip() for s in study_id.split(',') if s.strip()]
                 num_study_ids += len(ids)
+                unique_study_ids.add(study_id)
                 
                 # Count NCT IDs
                 for sid in ids:
                     if sid.startswith('NCT'):
                         num_nct_ids += 1
+                        unique_nct_ids.add(sid)
             else:
                 # Single ID
                 num_study_ids += 1
+                unique_study_ids.add(study_id)
                 if study_id.startswith('NCT'):
                     num_nct_ids += 1
+                    unique_nct_ids.add(study_id)
 
     # Create summary
     summary = {
@@ -79,7 +87,9 @@ def analyze_data(data, name):
         'number_of_studies': len(data),
         'number_of_requests': num_requests,
         'number_of_study_ids': num_study_ids,
-        'number_of_nct_ids': num_nct_ids
+        'number_of_nct_ids': num_nct_ids,
+        'number_unique_study_ids': len(unique_study_ids),
+        'number_unique_nct_ids': len(unique_nct_ids)
     }
     
     return summary

@@ -203,6 +203,21 @@ def get_csdr_data():
     if not tbody:
         raise Exception("Failed to find the table body in the proposals table on CSDR page.")
     
+    # check request id already in CSDR file
+    load_data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "01_data", "csdr_data.json")
+    existing_data = []
+    # Load existing data if the file exists
+    if os.path.exists(load_data_path):
+        try:
+            with open(load_data_path, 'r') as f:
+                existing_data = json.load(f)
+        except json.JSONDecodeError:
+            # Handle case where file exists but is empty or malformed
+            existing_data = []
+    else:
+        # Make sure the directory exists
+        os.makedirs(os.path.dirname(load_data_path), exist_ok=True)
+
     # Iterate through each row in the table
     for row in tbody.find_all('tr'):
         row_data = {}
@@ -211,16 +226,14 @@ def get_csdr_data():
             if counter == 0:
                 # Request ID
                 row_data['request_id'] = cell.text.strip()
-                # check request id already in CSDR file
-                load_data_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "01_data", "csdr_data.json")
-                if os.path.exists(load_data_path):
-                    with open(load_data_path, 'r') as f:
-                        existing_data = json.load(f)
-                    # check if request_id already exists
-                    if any(d['request_id'] == row_data['request_id'] for d in existing_data):
-                        print(f"Request ID {row_data['request_id']} already exists in the CSDR data file. Skipping.")
-                        row_data = {}  # Reset row_data to skip this row
-                        break  # Skip to the next row
+                # check if request_id already exists
+                if any(d['request_id'] == row_data['request_id'] for d in existing_data):
+                    print(f"Skipping existing request ID: {row_data['request_id']}")
+                    # load data from existing_data
+                    row_data = next((d for d in existing_data if d['request_id'] == row_data['request_id']), {})
+                    if row_data:    
+                        data.append(row_data)
+                    break  # Skip to the next row
             elif counter == 1:
                 # Sponsor
                 row_data['sponsor'] = cell.text.strip()
@@ -317,16 +330,15 @@ def csdr_ID_grapper(link):
         date_text = date_div.text.strip()
         # Extract year from date text (assuming format like "26 November 2013")
         date_parts = date_text.split()
-        if len(date_parts) >= 3:
-            try:
-                year = date_parts[-1]  # Get the last part which should be the year
-                # Validate it's a 4-digit year
-                if len(year) == 4 and year.isdigit():
-                    print(f"Found year: {year}")
-                else:
-                    year = None
-            except:
+        try:
+            year = date_parts[-1]  # Get the last part which should be the year
+            # Validate it's a 4-digit year
+            if len(year) == 4 and year.isdigit():
+                print(f"Found year: {year}")
+            else:
                 year = None
+        except:
+            year = None
     return study_ids, year
 
 def csdr_nct_grapper(link):
@@ -517,9 +529,9 @@ def main():
     """
     Main function to run the scrapers
     """
-    vivli_data = get_vivli_data()
+    #vivli_data = get_vivli_data()
     csdr_data = get_csdr_data()
-    yoda_data = get_yoda_data()
+    #yoda_data = get_yoda_data()
 
     # Save the data as json file
     # Use the correct absolute path to your data directory
@@ -528,27 +540,27 @@ def main():
     # Create the directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
     
-    vivli_file_path = os.path.join(output_dir, "vivli_data.json")
-    with open(vivli_file_path, 'w') as f:
-        json.dump(vivli_data, f, indent=4)
+    #vivli_file_path = os.path.join(output_dir, "vivli_data.json")
+    #with open(vivli_file_path, 'w') as f:
+    #    json.dump(vivli_data, f, indent=4)
 
     csdr_file_path = os.path.join(output_dir, "csdr_data.json")
     with open(csdr_file_path, 'w') as f:
         json.dump(csdr_data, f, indent=4)
-    yoda_file_path = os.path.join(output_dir, "yoda_data.json")
-    with open(yoda_file_path, 'w') as f:
-        json.dump(yoda_data, f, indent=4)
+    #yoda_file_path = os.path.join(output_dir, "yoda_data.json")
+    #with open(yoda_file_path, 'w') as f:
+    #    json.dump(yoda_data, f, indent=4)
 
-    print(f"Vivli data saved to {vivli_file_path}")
+    #print(f"Vivli data saved to {vivli_file_path}")
     print(f"CSDR data saved to {csdr_file_path}")
-    print(f"YODA data saved to {yoda_file_path}")
+    #print(f"YODA data saved to {yoda_file_path}")
     
     # Print the number of studies scraped
-    print(f"Number of studies scraped from Vivli: {len(vivli_data)}")
+    #print(f"Number of studies scraped from Vivli: {len(vivli_data)}")
     print(f"Number of studies scraped from CSDR: {len(csdr_data)}")
-    print(f"Number of studies scraped from YODA: {len(yoda_data)}")
+    #print(f"Number of studies scraped from YODA: {len(yoda_data)}")
 
-    print(f"Total number of studies scraped: {len(vivli_data) + len(csdr_data) + len(yoda_data)}")
+    #print(f"Total number of studies scraped: {len(vivli_data) + len(csdr_data) + len(yoda_data)}")
 
 
 if __name__ == "__main__":
