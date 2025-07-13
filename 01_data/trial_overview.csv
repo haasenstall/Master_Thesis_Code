@@ -1,0 +1,5 @@
+name,total_study_id,total_nct_id,phases
+vivli,5931,5931,"{'Phase 1': 848, 'Phase 2': 1283, 'Phase 3': 2823, 'Phase 4': 530, 'Other Phases': 447, 'total_phases': 5931}"
+csdr,1327,1327,"{'Phase 1': 320, 'Phase 2': 285, 'Phase 3': 539, 'Phase 4': 168, 'Other Phases': 15, 'total_phases': 1327}"
+yoda,461,461,"{'Phase 1': 11, 'Phase 2': 98, 'Phase 3': 305, 'Phase 4': 35, 'Other Phases': 12, 'total_phases': 461}"
+total,7719,7719,"{'Phase 1': 1179, 'Phase 2': 1666, 'Phase 3': 3667, 'Phase 4': 733, 'Other Phases': 474, 'total_phases': 7719}"

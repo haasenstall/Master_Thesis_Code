@@ -1,0 +1,229 @@
+{
+    "studyHistoryEntries":[],
+    "fundingOrganizations":[],
+    "_etag":"\"92003243-0000-0300-0000-67a406a60000\"",
+    "_ts":1738802854,
+    "registryInfo":
+    [{
+        "registryName":"ClinicalTrials.gov",
+        "registryId":"NCT00000459"
+        }],
+    "principalInvestigator":
+        {
+            "firstName":"",
+            "lastName":"",
+            "degrees":[],
+            "emailAddress":"",
+            "orcidId":""
+            },
+    "studyTitle":"Dietary Intervention Study in Children (DISC)",
+    "acronym":"",
+    "sponsorProtocolId":"48",
+    "secondaryIds":
+    ["U01HL037947","U01HL037948","U01HL037954","U01HL037962","U01HL037966","U01HL037975","U01HL038110"],
+    "leadSponsor":
+    {
+        "agency":"National Heart, Lung, and Blood Institute (NHLBI)",
+        "agencyClass":"NIH"
+        },
+    "collaborators":[],
+    "studyStartDate":"1986-12-01T00:00:00+00:00",
+    "actualStudyCompletionDate":"1999-01-31T00:00:00+00:00",
+    "startDate":"1986-12-01T00:00:00",
+    "endDate":"1999-01-31T00:00:00",
+    "studyStartDateString":"December 1986",
+    "studyEndDateString":"January 1999",
+    "fullDates":false,
+    "actualEnrollment":0,
+    "participantEligibility":
+    {
+        "criteria":"",
+        "sex":"All",
+        "acceptsHealthyVolunteers":"No",
+        "minimumAge":
+        {
+            "ageNum":8,
+            "timeUnit":"Years"
+            },
+        "maximumAge":
+        {
+            "ageNum":10,
+            "timeUnit":"Years"
+            },
+        "ageDescription":"8 Years to 10 Years"
+        },
+    "locationsOfStudySites":[],
+    "overallStatus":"Completed",
+    "whyStudyStopped":"",
+    "phase":"Phase3",
+    "studyType":"Interventional",
+    "studyDesign":
+    {
+        "interventionModel":"",
+        "assignmentToIntervention":"Randomized",
+        "subjectMaskedOrBlinded":null,
+        "investigatorMaskedOrBlinded":null,
+        "outcomeAssessorMaskedOrBlinded":null,
+        "careProviderMaskedOrBlinded":null,
+        "outcomesBeforeStudyStart":null
+        },
+    "arms":
+    [{
+        "armType":"Experimental",
+        "description":"http://data.vivli.org/intervention-groups/PNzeq3pdNYs22Qa",
+        "actualEnrollmentByArm":null,
+        "interventions":
+        [{
+            "interventionType":"Complementary",
+            "interventionName":"Dietary Regime",
+            "description":null,
+            "setting":null,
+            "interventionRoute":"Not reported",
+            "interventionProvider":null,
+            "dose":null,
+            "frequency":null,
+            "duration":null,
+            "isChild":false,
+            "isLastChild":false,
+            "pharmaDoseFrequencyDurationDescriptor":"Dietary Regime  ",
+            "id":"http://data.vivli.org/interventions/Yg3ko1DGZOfrrMK",
+            "comparatorLabel":"Experimental"
+            }]
+        }],
+    "conditions":["Low Density Lipoprotein Cholesterol"],
+    "populationIdsForConditions":["http://data.vivli.org/populations/M3Doad9gyKSvgnE"],
+    "interventionNames":["Dietary Regime"],
+    "outcomeNames":["Ldl Cholesterol"],
+    "outcomes":
+    [{
+        "timePointDescriptors":[],
+        "isPrimary":null,
+        "description":"After three years of followup, LDL cholesterol decreased by an average of 15.4 mg/dL in the intervention group and 11.9 mg/dL in the usual care group. This difference of 3.3 mg/dL (adjusted for baseline levels and gender) was significant (p=0.02). There were no significant differences between the two groups in adjusted mean height or serum ferritin. There were no significant differences in secondary safety measures as well. (JAMA, 1995; 273(18):1429-35). After 7 years of followup, the difference in LDL-cholesterol between the two treatment groups decreased to 2.0 mg/dL, which was no longer significant. There continued to be no significant differences in an adverse direction in primary or secondary safety measures. (Pediatrics, 2001;107(2):256-264).",
+        "domain":"Ldl Cholesterol",
+        "specificMeasurement":null,
+        "specificMetric":null,
+        "methodOfAggregation":null,
+        "timepoints":"",
+        "classification":"Physiological or clinical",
+        "id":"http://data.vivli.org/outcomes/j08vBNRrAPhyyp1",
+        "isChild":false,
+        "isNonLastChild":false,
+        "outcomeGroupId":"http://data.vivli.org/outcome-groups/w0ez5qrov6FPP2a",
+        "outcomeOrMeasurement":"Ldl Cholesterol"
+        }],
+    "populationVocabularyItems":
+    [{
+        "code":"lr5qxyw6ww35",
+        "term":"Male and Female"
+        },
+    {
+        "code":"kk05h7rpym8w",
+        "term":"Child 6-12 years"
+        },
+    {
+        "code":"r4hp3qqmtqw7",
+        "term":"Low Density Lipoprotein Cholesterol"
+        }],
+    "interventionVocabularyItems":
+    [{
+        "code":"kn47hxb2lyv7",
+        "term":"Complementary"
+        },
+    {
+        "code":"r4hp5zgwyryt",
+        "term":"Dietary Regime"
+        }],
+    "outcomeVocabularyItems":
+    [{
+        "code":"q25g9q497cwj",
+        "term":"Physiological or clinical"
+        },
+    {
+        "code":"r4hp3r757l4t",
+        "term":"Ldl Cholesterol"
+        }],
+    "nctId":"NCT00000459",
+    "researchTeam":[],
+    "externalLinks":null,
+    "approvedDrs":[],
+    "embargoDate":null,
+    "allowRequestersToContactStudyOwner":false,
+    "sendEmailsToResearchTeam":false,
+    "picoAndStudyDesign":null,
+    "vocabSchemaDateTime":"0001-01-01T00:00:00+00:00",
+    "orgId":"7f3e1a46-308a-4e71-8c7b-95eff1f1d18d",
+    "orgCode":"BILINC",
+    "orgName":"BioLINCC (a data-sharing platform funded by the National Institutes of Health)",
+    "status":"Posted",
+    "requiresIRPApproval":null,
+    "digitalObjectId":null,
+    "dataProtectionLevel":null,
+    "irpOrgId":null,
+    "annotatorOrgId":"473b267f-f4a5-4c71-b4cc-92680a499c86",
+    "qaReviewerOrgId":"fd1fd327-8c19-4fd6-9db2-4c2328faf380",
+    "saveStudyIPDForFutureUse":false,
+    "ipdDataPackageId":"79d28a51-ec8f-40ca-b7a9-b012af74a0b1",
+    "metaDataDataPackageId":"7174dbfc-3a2a-4691-b826-fb8bfa622d95",
+    "irpOrgName":null,
+    "annotatorOrgName":"Aptara",
+    "qaReviewerOrgName":"Cochrane",
+    "description":null,
+    "draftCreatedDate":"0001-01-01T00:00:00+00:00",
+    "postedDate":"2018-07-09T16:07:01.1765061+00:00",
+    "submittedDate":"0001-01-01T00:00:00+00:00",
+    "ipdContentType":"Basic",
+    "studyMetadataDoi":"https://doi.org/10.25934/00000001 Titel anhand dieser DOI in Citavi-Projekt übernehmen",
+    "metadataSources":[],
+    "citationReferences":[],
+    "curationRevisionRequiredCount":0,
+    "alternativeMetadataDocumentUri":null,
+    "externalStudyUri":"https://biolincc.nhlbi.nih.gov/studies/disc",
+    "studyRequestBehavior":"External",
+    "participantComments":null,
+    "armsComments":null,
+    "outcomesComments":null,
+    "picoTermsComments":null,
+    "chatChannelId":null,
+    "overrideDisplayDefaults":false,
+    "therapeuticAreas":["Cardiovascular Disease"],
+    "extractedInterventions":["diet, fat-restricted"],
+    "extractedConditions":["Cardiovascular Diseases","Heart Diseases","Hypercholesterolemia"],
+    "extractedBriefSummary":"To assess the feasibility, acceptability, efficacy, and safety of dietary intervention in free-living children ages 8-10 with elevated low density lipoprotein cholesterol levels.",
+    "extractedSponsorClinicalRegistryUrl":null,
+    "tag":null,
+    "bulkUploadContentType":"CSDRMetadataSheet",
+    "miniCurationInterventions":null,
+    "miniCurationConditions":null,
+    "downloadableStudyIPDDataPackage":false,
+    "studyIPDDataPackagesSuppliedOnSubmission":false,
+    "showExtendedStudyMetadata":false,
+    "doiStem":"00000001",
+    "contributorType":null,
+    "studyIPDDataPackageDoi":" ",
+    "additionalInformation":null,
+    "bypassDataContributorReview":true,
+    "bypassIRPReview":true,
+    "alternateDataVersions":[],
+    "hasSubmittedIpd":false,
+    "grant":null,
+    "funder":null,
+    "funderEmail":null,
+    "alternateDoi":null,
+    "ownerIds":[],
+    "tombstoneDoi":false,
+    "amrDataset":null,
+    "isAmrDataset":false,
+    "id":"cc3a8b79-d102-41a4-aa0a-8e9ac2c16268",
+    "schemaVersion":"1.0.0",
+    "documentType":"Study",
+    "createdBy":null,
+    "updatedBy":"e50a66ee-47d6-43ce-9bae-295148fad7ed",
+    "createdDate":null,
+    "updatedDate":"2025-02-06T00:47:34.2654856+00:00",
+    "eTag":"\"92003243-0000-0300-0000-67a406a60000\"",
+    "timestamp":"2025-02-06T00:47:34",
+    "location":null,
+    "tags":null,
+    "name":null,
+    "type":null
+}
