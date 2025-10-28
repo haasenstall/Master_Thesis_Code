@@ -1,0 +1,42 @@
+
+    Best Features Multilevel Logistic Regression Results
+    ==================================================
+    
+    Feature Selection Process:
+    - Started with 5 candidate features: ['completeness_percentage', 'document_count', 'qualifier', 'tree_number', 'log_enrollment']
+    - Used forward selection with AUC as criterion
+    - Selected 1 features: ['completeness_percentage']
+    
+    Single Feature Performance:
+      completeness_percentage: AUC = 0.977
+  document_count: AUC = 0.974
+  qualifier: AUC = 0.969
+  tree_number: AUC = 0.964
+  log_enrollment: AUC = 0.963
+    
+    Final Model Performance (test set):
+    - Selected Features: ['completeness_percentage']
+    - AUC: 0.977
+    - Average Precision: 0.972
+    - Brier Score: 0.088
+    - Accuracy: 0.950
+    - Precision: 1.000
+    - Recall: 0.805
+    - F1-Score: 0.892
+    
+    Model Configuration:
+    - Design = [X_best | W] (sparse CSR)
+    - Penalty: L2 (Gaussian prior), solver='saga'
+    - Selected C (prior variance): 1.000
+    
+    Fixed Effects (standardized scale):
+      completeness_percentage: 0.097 (OR=1.102)
+    
+    Data Information:
+    - Total trials: 5876
+    - Train trials: 4113
+    - Test trials: 1763
+    - Test requested: 452 (25.6%)
+    - Requests: 995
+    - Trials with membership: 1507
+    

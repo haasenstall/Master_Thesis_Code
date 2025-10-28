@@ -1,0 +1,30 @@
+[
+    {
+        "source_name": "CSDR",
+        "number_of_requests": 392,
+        "number_of_institutions": 339,
+        "number_of_nct_ids": 2291,
+        "number_unique_nct_ids": 1151
+    },
+    {
+        "source_name": "Vivli",
+        "number_of_requests": 699,
+        "number_of_institutions": 471,
+        "number_of_nct_ids": 3107,
+        "number_unique_nct_ids": 1420
+    },
+    {
+        "source_name": "YODA",
+        "number_of_requests": 441,
+        "number_of_institutions": 299,
+        "number_of_nct_ids": 2854,
+        "number_unique_nct_ids": 387
+    },
+    {
+        "source_name": "Total",
+        "number_of_requests": 1532,
+        "number_of_institutions": 968,
+        "number_of_nct_ids": 8252,
+        "number_unique_nct_ids": 2439
+    }
+]

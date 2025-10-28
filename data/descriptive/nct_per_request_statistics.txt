@@ -1,0 +1,11 @@
+NCTs per Request Statistics
+===========================
+Total requests: 995
+Total unique NCTs: 6499
+Mean NCTs per request: 6.53
+Median NCTs per request: 3.00
+Max NCTs in a request: 184
+Min NCTs in a request: 1
+Std deviation: 11.93
+95th percentile: 22.00
+99th percentile: 58.12

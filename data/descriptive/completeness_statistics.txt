@@ -1,0 +1,9 @@
+AACT Metadata Completeness Statistics
+=====================================
+Total trials analyzed: 6203
+Average completeness: 0.00%
+Median completeness: 0.00%
+Min completeness: 0.00%
+Max completeness: 0.00%
+Average total cells per trial: 0
+Average empty cells per trial: 0

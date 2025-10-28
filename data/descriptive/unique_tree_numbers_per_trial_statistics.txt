@@ -1,0 +1,11 @@
+Unique Tree Numbers per Trial Statistics
+=========================================
+Total trials: 5973
+Total unique tree numbers: 130944
+Mean unique tree numbers: 21.92
+Median unique tree numbers: 18.00
+Max unique tree numbers: 359
+Min unique tree numbers: 1
+Std deviation: 16.57
+95th percentile: 53.00
+99th percentile: 76.28

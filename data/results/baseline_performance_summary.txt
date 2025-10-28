@@ -1,0 +1,43 @@
+
+        BASELINE LOGISTIC REGRESSION ANALYSIS RESULTS
+        =============================================
+
+        Dataset Information:
+        - Total trials analyzed: 5876
+        - Requested trials: 1507 (25.6%)
+        - Non-requested trials: 4369 (74.4%)
+
+        Model Performance:
+        - Accuracy: 0.737
+        - Precision: 0.401
+        - Recall: 0.051
+        - F1-Score: 0.091
+        - AUC-ROC: 0.703
+        - Brier Score: 0.175
+
+        Feature Coefficients:
+        - Data Completeness: -0.012
+        - Number of Qualifiers: -0.190
+        - Log Enrollment: -0.127
+        - Intercept: -1.850
+
+        Interpretation:
+        - Higher completeness decreases request probability
+        - More qualifiers decrease request probability  
+        - Larger enrollment decreases request probability
+
+        Confusion Matrix:
+        [[4254  115]
+ [1430   77]]
+
+        Classification Report:
+                      precision    recall  f1-score   support
+
+           0       0.75      0.97      0.85      4369
+           1       0.40      0.05      0.09      1507
+
+    accuracy                           0.74      5876
+   macro avg       0.57      0.51      0.47      5876
+weighted avg       0.66      0.74      0.65      5876
+
+    

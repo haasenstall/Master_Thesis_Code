@@ -1,0 +1,10 @@
+Enrollment Statistics
+=====================
+Total records: 6101
+Valid records: 5796
+Enrollment range: 1 - 2539
+Mean enrollment: 382.49
+Median enrollment: 227.00
+Std deviation: 434.81
+95th percentile: 1284.50
+99th percentile: 2054.05

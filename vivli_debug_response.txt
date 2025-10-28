@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en-US">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	
+	<link rel="profile" href="http://gmpg.org/xfn/11">
+	
+	<link rel="shortcut icon" href="https://vivli.org/wp-content/themes/vivli22/favicon.ico" />
+
+	<meta name="apple-mobile-web-app-title" content="Vivli">
+	
+	<link href="https://fonts.googleapis.com/css?family=Open+Sans:300,300i,400,400i,700,700i" rel="stylesheet"><link href="https://fonts.googleapis.com/css?family=Raleway:100,100i,400,400i,700,700i" rel="stylesheet"><meta name="apple-mobile-web-app-title" content="Vivli">
+	
+	<link rel="apple-touch-icon" href="https://vivli.org/wp-content/themes/vivli22/images/touch-icon-iphone.png">
+	<link rel="apple-touch-icon" sizes="76x76" href="https://vivli.org/wp-content/themes/vivli22/images/touch-icon-ipad.png">
+	<link rel="apple-touch-icon" sizes="120x120" href="https://vivli.org/wp-content/themes/vivli22/images/touch-icon-iphone-retina.png">
+	<link rel="apple-touch-icon" sizes="152x152" href="https://vivli.org/wp-content/themes/vivli22/images/touch-icon-ipad-retina.png">
+	
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	
+	<!--[if lte IE 8]>
+	<link rel="stylesheet" type="text/css" href="https://vivli.org/wp-content/themes/vivli22/css/ie8.css" />
+	![endif]-->
+	
+	<meta name='robots' content='index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1' />
+
+	<!-- This site is optimized with the Yoast SEO plugin v23.0 - https://yoast.com/wordpress/plugins/seo/ -->
+	<title>Approved Research Proposals - Vivli</title>
+	<link rel="canonical" href="https://vivli.org/approved-research-proposals/" />
+	<meta property="og:locale" content="en_US" />
+	<meta property="og:type" content="article" />
+	<meta property="og:title" content="Approved Research Proposals - Vivli" />
+	<meta property="og:description" content="Vivli aims to advance human health through clinical research data sharing. One of the key ways we 

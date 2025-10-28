@@ -1,0 +1,11 @@
+Unique Qualifiers per Trial Statistics
+=========================================
+Total trials: 5973
+Total unique qualifiers: 21905
+Mean unique qualifiers: 3.67
+Median unique qualifiers: 3.00
+Max unique qualifiers: 26
+Min unique qualifiers: 1
+Std deviation: 2.12
+95th percentile: 8.00
+99th percentile: 10.00

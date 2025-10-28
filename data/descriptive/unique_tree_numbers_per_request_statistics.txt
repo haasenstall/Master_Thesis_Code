@@ -1,0 +1,11 @@
+Unique Tree Numbers per Request Statistics
+=========================================
+Total requests: 952
+Total unique tree numbers: 47714
+Mean unique tree numbers: 50.12
+Median unique tree numbers: 37.00
+Max unique tree numbers: 527
+Min unique tree numbers: 2
+Std deviation: 49.68
+95th percentile: 132.15
+99th percentile: 240.84

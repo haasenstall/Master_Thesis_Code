@@ -1,0 +1,11 @@
+Unique Qualifiers per Request Statistics
+=========================================
+Total requests: 952
+Total unique qualifiers: 5740
+Mean unique qualifiers: 6.03
+Median unique qualifiers: 5.00
+Max unique qualifiers: 35
+Min unique qualifiers: 1
+Std deviation: 4.27
+95th percentile: 14.00
+99th percentile: 19.49

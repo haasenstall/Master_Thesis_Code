@@ -1,0 +1,43 @@
+
+        MAP (Ridge) Multiple-Membership Logistic (Trial-level)
+
+        Data:
+        - Total trials: 5876
+        - Train trials: 4113 
+        - Test trials: 1763
+        - Test requested: 452 (25.6%)
+        - Requests (columns in W): 995
+        - Trials with membership: 1507
+        - Matrix density: 0.0010
+
+        Model:
+        - Design = [X_std | W] (sparse CSR)
+        - Penalty: L2 (Gaussian prior), solver='saga'
+        - Selected C (prior variance ~ tau^2): 1.000
+
+        Performance (test set):
+        - AUC: 0.966
+        - Average Precision: 0.935
+        - Brier Score: 0.085
+        - Accuracy: 0.939
+        - Precision: 0.888
+        - Recall: 0.874
+        - F1-Score: 0.881
+
+        Fixed effects (std. scale):
+          completeness_percentage: 0.039 (OR=1.039)
+  document_count: -0.493 (OR=0.611)
+  qualifier: -0.319 (OR=0.727)
+  tree_number: 0.434 (OR=1.544)
+  log_enrollment: 0.434 (OR=1.543)
+
+        Matrix Information:
+        - Total trials: 5876
+        - Total requests: 995  
+        - Trials with request membership: 1507
+        - Matrix sparsity: 99.9% zeros
+
+        Files saved:
+        - Fixed effects: mm_map_fixed_effects.csv
+        - Request effects: mm_map_request_effects_full.csv (with top/bottom 30 CSVs)
+        
