@@ -74,7 +74,6 @@ class Institution(Base):
     # Relationships
     clinical_trial = relationship("ClinicalTrial", back_populates="institution")
 
-
 class Investigator(Base):
     __tablename__ = 'investigator'
     

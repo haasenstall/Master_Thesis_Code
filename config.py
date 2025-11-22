@@ -10,16 +10,16 @@ PROJECT_DESC = {
 # Database configuration
 MY_DB_CONFIG = {
     'dbname': 'MASTER',
-    'user': 'postgres',
-    'password': 'Nwa471995',
+    'user': 'xxx',
+    'password': 'xxx',
     'host': 'localhost',
     'port': 5432
 }
 
 AACT_DB_CONFIG = {
     'dbname': 'aact',
-    'user': 'haasenstall',
-    'password': 'Nwa471995',
+    'user': 'xxx',
+    'password': 'xxx',
     'host': 'aact-db.ctti-clinicaltrials.org',
     'port': 5432
 }
@@ -158,8 +158,7 @@ PROJECT_SETTINGS = {
     "timeout": 30,
     "log_level": "ERROR",
     "max_workers": 3,
-    "omp_num_threads": 4,
-    
+    "omp_num_threads": 4
     }
 
 # === Additional configurations ===

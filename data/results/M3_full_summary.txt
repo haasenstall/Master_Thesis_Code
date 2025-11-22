@@ -1,0 +1,19 @@
+
+        M3_full Multilevel Logistic Regression
+        -------------------------------------------
+        Features: ['qualifier', 'tree_number', 'document_count', 'completeness_percentage']
+        Train N: 4113
+        Test N: 1763
+        Test positives: 452 (25.64%)
+        Log-Likelihood (test): -574.005
+        AIC (test): 3148.011
+        BIC (test): 8622.783
+        AUC (test): 0.970
+        Brier (test): 0.087
+        Selected C: 1.000
+        Betas (std scale):
+          qualifier: -0.3055 (OR=0.7368)
+  tree_number: 0.4168 (OR=1.5170)
+  document_count: -0.5281 (OR=0.5897)
+  completeness_percentage: 0.0914 (OR=1.0957)
+        

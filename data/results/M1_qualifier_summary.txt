@@ -1,0 +1,16 @@
+
+        M1_qualifier Multilevel Logistic Regression
+        -------------------------------------------
+        Features: ['qualifier']
+        Train N: 4113
+        Test N: 1763
+        Test positives: 452 (25.64%)
+        Log-Likelihood (test): -597.169
+        AIC (test): 3188.338
+        BIC (test): 8646.685
+        AUC (test): 0.969
+        Brier (test): 0.088
+        Selected C: 1.000
+        Betas (std scale):
+          qualifier: 0.0791 (OR=1.0823)
+        

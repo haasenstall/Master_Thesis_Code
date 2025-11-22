@@ -1,0 +1,17 @@
+
+        M2_qualifier_tree Multilevel Logistic Regression
+        -------------------------------------------
+        Features: ['qualifier', 'tree_number']
+        Train N: 4113
+        Test N: 1763
+        Test positives: 452 (25.64%)
+        Log-Likelihood (test): -592.563
+        AIC (test): 3181.126
+        BIC (test): 8644.949
+        AUC (test): 0.966
+        Brier (test): 0.087
+        Selected C: 1.000
+        Betas (std scale):
+          qualifier: -0.2909 (OR=0.7476)
+  tree_number: 0.4724 (OR=1.6038)
+        

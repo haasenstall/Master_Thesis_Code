@@ -3,8 +3,8 @@
 Dep. Variable:              requested   No. Observations:                 5876
 Model:                          Logit   Df Residuals:                     5870
 Method:                           MLE   Df Model:                            5
-Date:                Tue, 28 Oct 2025   Pseudo R-squ.:                 0.07838
-Time:                        16:10:46   Log-Likelihood:                -3083.2
+Date:                Mon, 17 Nov 2025   Pseudo R-squ.:                 0.07838
+Time:                        13:40:01   Log-Likelihood:                -3083.2
 converged:                       True   LL-Null:                       -3345.4
 Covariance Type:            nonrobust   LLR p-value:                4.263e-111
 ===========================================================================================

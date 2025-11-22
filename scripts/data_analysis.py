@@ -856,497 +856,263 @@ def multilevel_logistic_regression(logger=None, db: SQL_DatabaseManager=None, pl
 
     logger.info(f"Analysis dataset: {len(regression_data)} trials, {regression_data['requested'].sum()} requested")
 
-    features = ['completeness_percentage', 'document_count', 'qualifier', 'tree_number', 'log_enrollment']
-    X = regression_data[features].to_numpy(dtype=np.float32)
-    y = regression_data['requested'].to_numpy(dtype=np.int32)
-
-    # Standardize features
-    scaler = StandardScaler()
-    Xs = scaler.fit_transform(X).astype(np.float32)
-
-    # Build weight matrix
-    W, req_index, info = build_weight_matrix(regression_data, request_links, logger)
-    logger.info(f"Weight matrix info: {info}")
-
-    # train test split
-    X_train, X_test, y_train, y_test, W_train, W_test = train_test_split(
-        Xs, y, W, test_size=test_size, stratify=y, random_state=random_state
+    # 1. EXPLORATORY PLOTS - Feature comparison between groups
+    features_to_analyze = ['completeness_percentage', 'qualifier', 'tree_number', 'log_enrollment']
+    plotter.binary_feature_comparison(
+        data=regression_data,
+        features=features_to_analyze,
+        target='requested',
+        save_name='baseline_feature_comparison.png',
+        path=DATA_PATHS['img']['regression']
     )
-    X_train = sparse.csr_matrix(X_train); X_test = sparse.csr_matrix(X_test)
-    X_design_train = sparse.hstack([X_train, W_train], format='csr')
-    X_design_test  = sparse.hstack([X_test,  W_test],  format='csr')
 
-    # CV or C - log loss for probabilistic calibration
-    Cs = np.array([0.01, 0.03, 0.1, 0.3, 1.0])
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    clf = LogisticRegressionCV(
-        Cs=Cs, cv=cv, solver="saga", penalty="l2", scoring="neg_log_loss",
-        max_iter=5000, n_jobs=-1, fit_intercept=True, class_weight="balanced", refit=True
+    # 2. INDIVIDUAL LOGISTIC REGRESSION PLOTS
+    # Plot for completeness
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='completeness_percentage',
+        y='requested',
+        xlabel='Data Completeness (%)',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_completeness.png',
+        path=DATA_PATHS['img']['regression']
     )
-    clf.fit(X_design_train, y_train)
-    C_star = float(clf.C_[0])
-    logger.info(f"Selected C (prior var) = {C_star}")
 
-    p_hat = clf.predict_proba(X_design_test)[:, 1]
-    auc = roc_auc_score(y_test, p_hat)  # Use y_test, not y
-    ap = average_precision_score(y_test, p_hat)
-    brier = brier_score_loss(y_test, p_hat)
-    fpr, tpr, _ = roc_curve(y_test, p_hat)
-    y_pred = (p_hat >= 0.5).astype(int)
-    cm = confusion_matrix(y_test, y_pred)  # Use y_test, not y
-    cls_rep = classification_report(y_test, y_pred)
+    # Plot for document counts
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='document_count',
+        y='requested',
+        xlabel='Number of Documents',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_documents.png',
+        path=DATA_PATHS['img']['regression']
+    )
 
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred, zero_division=0)
-    recall = recall_score(y_test, y_pred, zero_division=0)
-    f1 = f1_score(y_test, y_pred, zero_division=0)
+    # Plot for qualifiers
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='qualifier',
+        y='requested',
+        xlabel='Number of Qualifiers',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_qualifiers.png',
+        path=DATA_PATHS['img']['regression']
+    )
 
-    logger.info(f"Multilevel Model AUC = {auc:.3f}, AP = {ap:.3f}, Brier = {brier:.3f}")
-    logger.info(f"Confusion Matrix:\n{cm}")
-    logger.info(f"Classification Report:\n{cls_rep}")
+    # Plot for tree numbers
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='tree_number',
+        y='requested',
+        xlabel='Number of Tree Numbers',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_tree_numbers.png',
+        path=DATA_PATHS['img']['regression']
+    )
 
-    # Extract coefficients
-    coef = clf.coef_.ravel()  # length p+R
-    p = len(features)
-    beta_fixed = coef[:p]
-    gamma_req = coef[p:]      # request effects (shrunk)
+    # Plot for enrollment
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='log_enrollment',
+        y='requested',
+        xlabel='Log(Enrollment + 1)',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_enrollment.png',
+        path=DATA_PATHS['img']['regression']
+    )
 
+    # 3. FIT MULTIPLE LOGISTIC REGRESSION MODEL
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score, 
+                                roc_curve, auc, confusion_matrix, classification_report,
+                                roc_auc_score, brier_score_loss)
+
+    # Prepare features
+    X = regression_data[['completeness_percentage', 'document_count', 'qualifier', 'tree_number', 'log_enrollment']]
+    y = regression_data['requested']
+
+    # Fit logistic regression
+    log_reg = LogisticRegression(random_state=42, solver='lbfgs', max_iter=200)
+    log_reg.fit(X, y)
+
+    # Make predictions
+    y_pred = log_reg.predict(X)
+    y_pred_proba = log_reg.predict_proba(X)[:, 1]
+
+    # Calculate metrics
+    accuracy = accuracy_score(y, y_pred)
+    precision = precision_score(y, y_pred, zero_division=0)
+    recall = recall_score(y, y_pred, zero_division=0)
+    f1 = f1_score(y, y_pred, zero_division=0)
+    fpr, tpr, _ = roc_curve(y, y_pred_proba)
+    auc_score = auc(fpr, tpr)
+    conf_matrix = confusion_matrix(y, y_pred)
+    brier_score = brier_score_loss(y, y_pred_proba)
+
+    # 4. COMPREHENSIVE CLASSIFICATION SUMMARY PLOT
     model_results = {
-        'confusion_matrix': cm.tolist(),
-        'accuracy': float(accuracy),           
-        'precision': float(precision),
-        'recall': float(recall),
-        'f1_score': float(f1),
-        'auc': float(auc),
+        'confusion_matrix': conf_matrix.tolist(),
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1_score': f1,
+        'auc': auc_score,
+        'coefficients': {
+            'completeness_percentage': log_reg.coef_[0][0],
+            'qualifier': log_reg.coef_[0][1], 
+            'log_enrollment': log_reg.coef_[0][2]
+        },
         'fpr': fpr.tolist(),
         'tpr': tpr.tolist(),
-        'predicted_probabilities': p_hat.tolist(),  # Test set predictions
-        'actual_labels': y_test.tolist(),           # FIXED: Use y_test, not y
-        'brier_score': float(brier),
-        'n_samples': len(y_test),                   # FIXED: Use len(y_test)
-        'n_positive': int(y_test.sum()),            # FIXED: Use y_test
-        'n_negative': int((1 - y_test).sum()),      # FIXED: Use y_test
-        'coefficients': {col: float(beta_fixed[i]) for i, col in enumerate(features)}
+        'predicted_probabilities': y_pred_proba.tolist(),
+        'actual_labels': y.tolist(),
+        'log_likelihood': -brier_score * len(y),  # Approximate
+        'aic': 2 * 4 - 2 * (-brier_score * len(y)),  # Approximate AIC
+        'n_samples': len(y),
+        'n_positive': y.sum(),
+        'n_negative': len(y) - y.sum(),
+        'brier_score': brier_score
     }
 
     plotter.classification_summary(
         model_results=model_results,
-        save_name='mm_map_classification_summary.png',
+        save_name='baseline_classification_summary.png',
         path=DATA_PATHS['img']['regression']
     )
+
+    # 5. PROBABILITY CALIBRATION PLOT
     plotter.probability_calibration_plot(
         model_results=model_results,
-        save_name='mm_map_probability_calibration.png',
+        save_name='baseline_probability_calibration.png',
         path=DATA_PATHS['img']['regression']
     )
 
-    os.makedirs(DATA_PATHS['results'], exist_ok=True)
+    # 6. SAVE STATISTICAL RESULTS
+    # Use statsmodels for detailed statistical output
+    X_sm = sm.add_constant(X)  # Add intercept
+    logit_model = sm.Logit(y, X_sm)
+    result = logit_model.fit(disp=0)
 
-    # 1) fixed effects table (standardized scale)
-    fixed_tbl = pd.DataFrame({
-        'feature': features,
-        'coef_std': beta_fixed,
-        'OR_per_1SD': np.exp(beta_fixed)
-    })
-    fixed_tbl.to_csv(os.path.join(DATA_PATHS['results'], 'mm_map_fixed_effects.csv'), index=False)
+    # Save detailed results
+    results_path = os.path.join(DATA_PATHS['results'], 'baseline_logistic_regression_summary.txt')
+    save_results(result.summary(), results_path)
+    logger.info(f"Saved detailed regression summary to {results_path}")
 
-    # 2) request effects (top/bottom 30 for readability)
-    inv_req_index = {j: rid for rid, j in req_index.items()}
-    req_df = pd.DataFrame({
-        'request_id': [inv_req_index[j] for j in range(len(gamma_req))],
-        'effect_logit': gamma_req,
-        'effect_OR': np.exp(gamma_req)
-    }).sort_values('effect_logit')
-    req_df.to_csv(os.path.join(DATA_PATHS['results'], 'mm_map_request_effects_full.csv'), index=False)
+    # Save model performance summary
+    performance_summary = f"""
+        BASELINE LOGISTIC REGRESSION ANALYSIS RESULTS
+        =============================================
 
-    head = req_df.tail(30); tail = req_df.head(30)
-    head.to_csv(os.path.join(DATA_PATHS['results'], 'mm_map_request_effects_top30.csv'), index=False)
-    tail.to_csv(os.path.join(DATA_PATHS['results'], 'mm_map_request_effects_bottom30.csv'), index=False)
+        Dataset Information:
+        - Total trials analyzed: {len(y)}
+        - Requested trials: {y.sum()} ({y.mean()*100:.1f}%)
+        - Non-requested trials: {len(y) - y.sum()} ({(1-y.mean())*100:.1f}%)
 
-    # 3) quick caterpillar plot
-    try:
-        plt.figure(figsize=(8, 5))
-        ordered = req_df.reset_index(drop=True)
-        idx = np.arange(len(ordered))
-        plt.plot(idx, ordered['effect_logit'].values, '.', ms=3)
-        plt.axhline(0, ls='--', c='k')
-        plt.xlabel('Requests (sorted)'); plt.ylabel('Effect on log-odds')
-        plt.tight_layout()
-        plt.savefig(os.path.join(DATA_PATHS['img']['regression'], 'mm_map_request_caterpillar.png'), dpi=150)
-        plt.close()
-    except Exception as e:
-        logger.warning(f"Caterpillar plot failed: {e}")
-
-    # 4) text summary
-    txt = f"""
-        MAP (Ridge) Multiple-Membership Logistic (Trial-level)
-
-        Data:
-        - Total trials: {len(y)}
-        - Train trials: {len(y_train)} 
-        - Test trials: {len(y_test)}
-        - Test requested: {int(y_test.sum())} ({y_test.mean()*100:.1f}%)
-        - Requests (columns in W): {info['n_requests']}
-        - Trials with membership: {info['n_with_membership']}
-        - Matrix density: {info['density']:.4f}
-
-        Model:
-        - Design = [X_std | W] (sparse CSR)
-        - Penalty: L2 (Gaussian prior), solver='saga'
-        - Selected C (prior variance ~ tau^2): {C_star:.3f}
-
-        Performance (test set):
-        - AUC: {auc:.3f}
-        - Average Precision: {ap:.3f}
-        - Brier Score: {brier:.3f}
+        Model Performance:
         - Accuracy: {accuracy:.3f}
         - Precision: {precision:.3f}
         - Recall: {recall:.3f}
         - F1-Score: {f1:.3f}
+        - AUC-ROC: {auc_score:.3f}
+        - Brier Score: {brier_score:.3f}
 
-        Fixed effects (std. scale):
-        {chr(10).join([f"  {feat}: {coef:.3f} (OR={np.exp(coef):.3f})" for feat, coef in zip(features, beta_fixed)])}
+        Feature Coefficients:
+        - Data Completeness: {log_reg.coef_[0][0]:.3f}
+        - Number of Qualifiers: {log_reg.coef_[0][1]:.3f}
+        - Log Enrollment: {log_reg.coef_[0][2]:.3f}
+        - Intercept: {log_reg.intercept_[0]:.3f}
 
-        Matrix Information:
-        - Total trials: {info['n_trials']}
-        - Total requests: {info['n_requests']}  
-        - Trials with request membership: {info['n_with_membership']}
-        - Matrix sparsity: {(1-info['density'])*100:.1f}% zeros
+        Interpretation:
+        - Higher completeness {"increases" if log_reg.coef_[0][0] > 0 else "decreases"} request probability
+        - More qualifiers {"increase" if log_reg.coef_[0][1] > 0 else "decrease"} request probability  
+        - Larger enrollment {"increases" if log_reg.coef_[0][2] > 0 else "decreases"} request probability
 
-        Files saved:
-        - Fixed effects: mm_map_fixed_effects.csv
-        - Request effects: mm_map_request_effects_full.csv (with top/bottom 30 CSVs)
-        """
-    save_results(txt, os.path.join(DATA_PATHS['results'], 'mm_map_summary.txt'))
+        Confusion Matrix:
+        {conf_matrix}
 
-    logger.info("MAP (ridge) multilevel logistic regression finished")
-
-    from sklearn.model_selection import learning_curve
-
-    train_sizes, train_scores, test_scores = learning_curve(
-        clf, X_design_train, y_train,
-        cv=5, scoring="roc_auc", n_jobs=-1,
-        train_sizes=np.linspace(0.1, 1.0, 5)
-    )
-    plt.plot(train_sizes, train_scores.mean(axis=1), label="train AUC")
-    plt.plot(train_sizes, test_scores.mean(axis=1), label="cv AUC")
-    plt.legend()
-    plt.savefig(os.path.join(DATA_PATHS['img']['regression'], 'mm_map_learning_curve.png'), dpi=150)
-    plt.close()
-
-    return clf, model_results, {'scaler': scaler, 'req_index': req_index, 'info': info}
-
-def multilevel_logistic_regression_best_features(logger=None, db: SQL_DatabaseManager=None, plotter: MasterPlotter=None, random_state=42, test_size=0.3):
+        Classification Report:
+        {classification_report(y, y_pred)}
     """
-    Multilevel logistic regression with automatic feature selection to find the best model.
-    Uses forward selection based on AUC to identify optimal feature subset.
+
+    performance_path = os.path.join(DATA_PATHS['results'], 'baseline_performance_summary.txt')
+    save_results(performance_summary, performance_path)
+    logger.info(f"Saved performance summary to {performance_path}")
+
+    logger.info("Baseline logistic regression analysis completed with visualizations")
+    
+    return result, model_results
+
+def build_weight_matrix(reg_data: pd.DataFrame, request_links: pd.DataFrame, logger=None) -> Tuple[sparse.csr_matrix, Dict[Any, int], Dict[str, Any]]:
+    """
+    Build a weighted matrix to get the relations between trials and requests.
+    (N x R) matrix where N is number of trials and R is number of requests.
     """
     if logger is None:
         setup_logging(mode='basic')
         logger = logging.getLogger(__name__)
 
-    logger.info("Starting multilevel logistic regression with feature selection")
+    logger.info("Building weight matrix for trials and requests")
 
-    if db is None:
-        db = SQL_DatabaseManager(db_config=MY_DB_CONFIG, connection_name='my_database')
-        logger.info("Connected to My Database")
-    if plotter is None:
-        plotter = MasterPlotter()
-        logger.info("Initialized MasterPlotter")
+    min_trials_per_request = 1
 
-    # Get merged data (same as regular multilevel)
-    merged_data, request_links = data_collection(logger, db, plotter)
-    if merged_data is None or merged_data.empty:
-        logger.error("Merged data is None or empty")
-        return
-    
-    # Mark requested trials
-    merged_data['requested'] = merged_data['nct_id'].isin(request_links['nct_id']).astype(int)
-    regression_data = merged_data.dropna(subset=['enrollment', 'completeness_percentage', 'document_count', 'qualifier', 'tree_number', 'requested'])
-    regression_data = regression_data[regression_data['enrollment'] > 0]
-    regression_data['log_enrollment'] = np.log1p(regression_data['enrollment'])
+    # align trial order
+    trial_ids = reg_data['nct_id'].tolist()
+    trial_index = {tid: i for i, tid in enumerate(trial_ids)}
 
-    logger.info(f"Analysis dataset: {len(regression_data)} trials, {regression_data['requested'].sum()} requested")
+    # pool requests with max(min_trials_per_request) trials
+    request_counts = request_links['request_id'].value_counts()
+    valid_requests = request_counts[request_counts >= min_trials_per_request].index.tolist()
+    req_links = request_links.copy()
+    
+    # Count how many requests get pooled
+    n_pooled = len(request_counts) - len(valid_requests)
+    req_links.loc[~req_links['request_id'].isin(valid_requests), 'request_id'] = '_OTHER_'
 
-    # All available features
-    all_features = ['completeness_percentage', 'document_count', 'qualifier', 'tree_number', 'log_enrollment']
-    
-    # Build weight matrix (same as regular multilevel)
-    W, req_index, info = build_weight_matrix(regression_data, request_links, logger)
-    logger.info(f"Weight matrix info: {info}")
+    # list requests
+    req_ids = sorted(req_links['request_id'].unique())
+    req_index = {rid: j for j, rid in enumerate(req_ids)}
+    R, N = len(req_ids), len(trial_ids)
 
-    y = regression_data['requested'].to_numpy(dtype=np.int32)
+    logger.info(f"Matrix dimensions: {N} trials x {R} requests")
+
+    # trial with request list
+    trial_with_req_list = req_links.groupby('nct_id')['request_id'].apply(list).to_dict()
+
+    # build matrix
+    rows, cols, data = [], [], []
+    with_membership = 0
+    for trial in trial_ids:
+        lst = trial_with_req_list.get(trial, [])
+        if lst:
+            with_membership += 1
+            w = 1.0 / len(lst)
+            i = trial_ids.index(trial)
+            for req in lst:
+                j = req_index[req]
+                rows.append(i)
+                cols.append(j)
+                data.append(w)
+
+    W = sparse.csr_matrix((data, (rows, cols)), shape=(N, R), dtype=np.float32)
+    logger.info(f"Weight matrix built with {W.nnz} non-zero entries")
     
-    # Feature selection using forward selection
-    logger.info("Starting forward feature selection...")
-    
-    best_features = []
-    best_auc = 0
-    feature_scores = {}
-    
-    # Try each feature individually first
-    for feature in all_features:
-        X_single = regression_data[[feature]].to_numpy(dtype=np.float32)
-        scaler = StandardScaler()
-        Xs_single = scaler.fit_transform(X_single).astype(np.float32)
-        
-        # Split data
-        X_train, X_test, y_train, y_test, W_train, W_test = train_test_split(
-            Xs_single, y, W, test_size=test_size, stratify=y, random_state=random_state
-        )
-        
-        # Build design matrix
-        X_train_sparse = sparse.csr_matrix(X_train)
-        X_test_sparse = sparse.csr_matrix(X_test)
-        X_design_train = sparse.hstack([X_train_sparse, W_train], format='csr')
-        X_design_test = sparse.hstack([X_test_sparse, W_test], format='csr')
-        
-        # Fit model
-        clf = LogisticRegressionCV(
-            Cs=np.array([0.01, 0.03, 0.1, 0.3, 1.0]), cv=3, solver="saga", penalty="l2",
-            scoring="neg_log_loss", max_iter=3000, n_jobs=-1, fit_intercept=True,
-            class_weight="balanced", refit=True
-        )
-        clf.fit(X_design_train, y_train)
-        
-        # Evaluate
-        p_hat = clf.predict_proba(X_design_test)[:, 1]
-        auc = roc_auc_score(y_test, p_hat)
-        feature_scores[feature] = auc
-        
-        logger.info(f"Single feature '{feature}': AUC = {auc:.3f}")
-    
-    # Start with best single feature
-    best_single_feature = max(feature_scores, key=feature_scores.get)
-    best_features = [best_single_feature]
-    best_auc = feature_scores[best_single_feature]
-    
-    logger.info(f"Best single feature: '{best_single_feature}' with AUC = {best_auc:.3f}")
-    
-    # Forward selection
-    remaining_features = [f for f in all_features if f != best_single_feature]
-    
-    while remaining_features:
-        best_addition = None
-        best_addition_auc = best_auc
-        
-        for feature in remaining_features:
-            candidate_features = best_features + [feature]
-            
-            # Test this combination
-            X_candidate = regression_data[candidate_features].to_numpy(dtype=np.float32)
-            scaler = StandardScaler()
-            Xs_candidate = scaler.fit_transform(X_candidate).astype(np.float32)
-            
-            # Split data
-            X_train, X_test, y_train, y_test, W_train, W_test = train_test_split(
-                Xs_candidate, y, W, test_size=test_size, stratify=y, random_state=random_state
-            )
-            
-            # Build design matrix
-            X_train_sparse = sparse.csr_matrix(X_train)
-            X_test_sparse = sparse.csr_matrix(X_test)
-            X_design_train = sparse.hstack([X_train_sparse, W_train], format='csr')
-            X_design_test = sparse.hstack([X_test_sparse, W_test], format='csr')
-            
-            # Fit model
-            clf = LogisticRegressionCV(
-                Cs=np.array([0.01, 0.03, 0.1, 0.3, 1.0]), cv=3, solver="saga", penalty="l2",
-                scoring="neg_log_loss", max_iter=3000, n_jobs=-1, fit_intercept=True,
-                class_weight="balanced", refit=True
-            )
-            clf.fit(X_design_train, y_train)
-            
-            # Evaluate
-            p_hat = clf.predict_proba(X_design_test)[:, 1]
-            auc = roc_auc_score(y_test, p_hat)
-            
-            logger.info(f"Features {candidate_features}: AUC = {auc:.3f}")
-            
-            if auc > best_addition_auc:
-                best_addition = feature
-                best_addition_auc = auc
-        
-        # Add best feature if it improves performance
-        if best_addition and best_addition_auc > best_auc + 0.001:  # Small threshold for improvement
-            best_features.append(best_addition)
-            remaining_features.remove(best_addition)
-            best_auc = best_addition_auc
-            logger.info(f"Added feature '{best_addition}'. New best AUC = {best_auc:.3f}")
-        else:
-            logger.info("No feature addition improves performance. Stopping selection.")
-            break
-    
-    logger.info(f"Final selected features: {best_features}")
-    logger.info(f"Best AUC achieved: {best_auc:.3f}")
-    
-    # Fit final model with best features
-    X_best = regression_data[best_features].to_numpy(dtype=np.float32)
-    scaler = StandardScaler()
-    Xs_best = scaler.fit_transform(X_best).astype(np.float32)
-    
-    # Final train-test split
-    X_train, X_test, y_train, y_test, W_train, W_test = train_test_split(
-        Xs_best, y, W, test_size=test_size, stratify=y, random_state=random_state
-    )
-    
-    X_train_sparse = sparse.csr_matrix(X_train)
-    X_test_sparse = sparse.csr_matrix(X_test)
-    X_design_train = sparse.hstack([X_train_sparse, W_train], format='csr')
-    X_design_test = sparse.hstack([X_test_sparse, W_test], format='csr')
-    
-    # Final model fit
-    clf_final = LogisticRegressionCV(
-        Cs=np.array([0.01, 0.03, 0.1, 0.3, 1.0]), cv=5, solver="saga", penalty="l2",
-        scoring="neg_log_loss", max_iter=5000, n_jobs=-1, fit_intercept=True,
-        class_weight="balanced", refit=True
-    )
-    clf_final.fit(X_design_train, y_train)
-    C_star = float(clf_final.C_[0])
-    logger.info(f"Final model - Selected C (prior var) = {C_star:.3f}")
-    
-    # Final evaluation
-    p_hat_final = clf_final.predict_proba(X_design_test)[:, 1]
-    auc_final = roc_auc_score(y_test, p_hat_final)
-    ap_final = average_precision_score(y_test, p_hat_final)
-    brier_final = brier_score_loss(y_test, p_hat_final)
-    fpr, tpr, _ = roc_curve(y_test, p_hat_final)
-    y_pred_final = (p_hat_final >= 0.5).astype(int)
-    cm_final = confusion_matrix(y_test, y_pred_final)
-    
-    accuracy = accuracy_score(y_test, y_pred_final)
-    precision = precision_score(y_test, y_pred_final, zero_division=0)
-    recall = recall_score(y_test, y_pred_final, zero_division=0)
-    f1 = f1_score(y_test, y_pred_final, zero_division=0)
-    
-    logger.info(f"Final Model Performance - AUC = {auc_final:.3f}, AP = {ap_final:.3f}, Brier = {brier_final:.3f}")
-    logger.info(f"Accuracy = {accuracy:.3f}, Precision = {precision:.3f}, Recall = {recall:.3f}, F1 = {f1:.3f}")
-    
-    # Extract coefficients
-    coef_final = clf_final.coef_.ravel()
-    p_best = len(best_features)
-    beta_fixed_final = coef_final[:p_best]
-    gamma_req_final = coef_final[p_best:]
-    
-    # Create model results
-    model_results = {
-        'confusion_matrix': cm_final.tolist(),
-        'accuracy': float(accuracy),
-        'precision': float(precision),
-        'recall': float(recall),
-        'f1_score': float(f1),
-        'auc': float(auc_final),
-        'fpr': fpr.tolist(),
-        'tpr': tpr.tolist(),
-        'predicted_probabilities': p_hat_final.tolist(),
-        'actual_labels': y_test.tolist(),
-        'brier_score': float(brier_final),
-        'n_samples': len(y_test),
-        'n_positive': int(y_test.sum()),
-        'n_negative': int((1 - y_test).sum()),
-        'coefficients': {col: float(beta_fixed_final[i]) for i, col in enumerate(best_features)},
-        'selected_features': best_features,
-        'feature_selection_scores': feature_scores
+    info = {
+        'n_trials': N,
+        'n_requests': R,
+        'n_with_membership': with_membership,
+        'density': W.nnz / (N * R),
+        'pooled': n_pooled,  # Added missing key
+        'rows_with_membership': with_membership  # Added missing key (alias)
     }
-    
-    # Generate plots
-    plotter.classification_summary(
-        model_results=model_results,
-        save_name='mm_best_features_classification_summary.png',
-        path=DATA_PATHS['img']['regression']
-    )
-    
-    plotter.probability_calibration_plot(
-        model_results=model_results,
-        save_name='mm_best_features_probability_calibration.png',
-        path=DATA_PATHS['img']['regression']
-    )
-    
-    # Save results
-    os.makedirs(DATA_PATHS['results'], exist_ok=True)
-    
-    # Feature selection results
-    selection_df = pd.DataFrame([
-        {'feature': feat, 'single_feature_auc': feature_scores[feat], 'selected': feat in best_features}
-        for feat in all_features
-    ]).sort_values('single_feature_auc', ascending=False)
-    selection_df.to_csv(os.path.join(DATA_PATHS['results'], 'mm_best_features_selection.csv'), index=False)
-    
-    # Fixed effects for best features
-    fixed_tbl = pd.DataFrame({
-        'feature': best_features,
-        'coef_std': beta_fixed_final,
-        'OR_per_1SD': np.exp(beta_fixed_final)
-    })
-    fixed_tbl.to_csv(os.path.join(DATA_PATHS['results'], 'mm_best_features_fixed_effects.csv'), index=False)
-    
-    # Request effects
-    inv_req_index = {j: rid for rid, j in req_index.items()}
-    req_df = pd.DataFrame({
-        'request_id': [inv_req_index[j] for j in range(len(gamma_req_final))],
-        'effect_logit': gamma_req_final,
-        'effect_OR': np.exp(gamma_req_final)
-    }).sort_values('effect_logit')
-    req_df.to_csv(os.path.join(DATA_PATHS['results'], 'mm_best_features_request_effects.csv'), index=False)
-    
-    # Summary text
-    txt = f"""
-    Best Features Multilevel Logistic Regression Results
-    ==================================================
-    
-    Feature Selection Process:
-    - Started with {len(all_features)} candidate features: {all_features}
-    - Used forward selection with AUC as criterion
-    - Selected {len(best_features)} features: {best_features}
-    
-    Single Feature Performance:
-    {chr(10).join([f"  {feat}: AUC = {score:.3f}" for feat, score in sorted(feature_scores.items(), key=lambda x: x[1], reverse=True)])}
-    
-    Final Model Performance (test set):
-    - Selected Features: {best_features}
-    - AUC: {auc_final:.3f}
-    - Average Precision: {ap_final:.3f}
-    - Brier Score: {brier_final:.3f}
-    - Accuracy: {accuracy:.3f}
-    - Precision: {precision:.3f}
-    - Recall: {recall:.3f}
-    - F1-Score: {f1:.3f}
-    
-    Model Configuration:
-    - Design = [X_best | W] (sparse CSR)
-    - Penalty: L2 (Gaussian prior), solver='saga'
-    - Selected C (prior variance): {C_star:.3f}
-    
-    Fixed Effects (standardized scale):
-    {chr(10).join([f"  {feat}: {coef:.3f} (OR={np.exp(coef):.3f})" for feat, coef in zip(best_features, beta_fixed_final)])}
-    
-    Data Information:
-    - Total trials: {len(y)}
-    - Train trials: {len(y_train)}
-    - Test trials: {len(y_test)}
-    - Test requested: {int(y_test.sum())} ({y_test.mean()*100:.1f}%)
-    - Requests: {info['n_requests']}
-    - Trials with membership: {info['n_with_membership']}
-    """
-    
-    save_results(txt, os.path.join(DATA_PATHS['results'], 'mm_best_features_summary.txt'))
-    
-    logger.info("Best features multilevel logistic regression completed")
-    
-    return clf_final, model_results, {
-        'scaler': scaler, 
-        'req_index': req_index, 
-        'info': info, 
-        'best_features': best_features,
-        'feature_scores': feature_scores
-    }   
+    return W, trial_index, info
 
-def mm_log_reg_only_enrollment_tree_number(logger=None, db: SQL_DatabaseManager=None, plotter: MasterPlotter=None, random_state=42, test_size=0.3):
+def multilevel_logistic_regression(logger=None, db: SQL_DatabaseManager=None, plotter: MasterPlotter=None, random_state=42, test_size=0.3):
     """
-    Multilevel-Membership logistic regression using only enrollment and tree_number as features.
+    Multilevel-Membership hierarchical logistic Regression via fast MAP (ridge) approximation.
     - Row = trial
     - y = requested (0/1)
-    - X = features (log_enrollment, tree_number)
+    - X = features (completeness, document_count, qualifiers, tree_number, enrollment)
     - W = weight matrix (trials x requests)
     - Design = [X | W], fit with L2 (Gaussian) prior on coefficients, solver = ''
     """
@@ -1354,7 +1120,7 @@ def mm_log_reg_only_enrollment_tree_number(logger=None, db: SQL_DatabaseManager=
         setup_logging(mode='basic')
         logger = logging.getLogger(__name__)
 
-    logger.info("Starting multilevel logistic regression with enrollment and tree_number only")
+    logger.info("Starting multilevel logistic regression analysis")
 
     if db is None:
         db = SQL_DatabaseManager(db_config=MY_DB_CONFIG, connection_name='my_database')
@@ -1368,283 +1134,288 @@ def mm_log_reg_only_enrollment_tree_number(logger=None, db: SQL_DatabaseManager=
     if merged_data is None or merged_data.empty:
         logger.error("Merged data is None or empty")
         return
-    
+
     # Mark requested trials
     merged_data['requested'] = merged_data['nct_id'].isin(request_links['nct_id']).astype(int)
-    regression_data = merged_data.dropna(subset=['enrollment', 'tree_number', 'requested'])
+
+    # Prepare data for regression
+    regression_data = merged_data.dropna(subset=['enrollment', 'completeness_percentage', 'qualifier', 'tree_number', 'requested'])
     regression_data = regression_data[regression_data['enrollment'] > 0]
+    
+    # Log-transform enrollment for better distribution
     regression_data['log_enrollment'] = np.log1p(regression_data['enrollment'])
 
     logger.info(f"Analysis dataset: {len(regression_data)} trials, {regression_data['requested'].sum()} requested")
 
-    features = ['log_enrollment', 'tree_number']
-    X = regression_data[features].to_numpy(dtype=np.float32)
-    y = regression_data['requested'].to_numpy(dtype=np.int32)
-
-    # Standardize features
-    scaler = StandardScaler()
-    Xs = scaler.fit_transform(X).astype(np.float32)
-
-    # Build weight matrix
-    W, req_index, info = build_weight_matrix(regression_data, request_links, logger)
-    logger.info(f"Weight matrix info: {info}")
-
-    # train test split
-    X_train, X_test, y_train, y_test, W_train, W_test = train_test_split(
-        Xs, y, W, test_size=test_size, stratify=y, random_state=random_state
+    # 1. EXPLORATORY PLOTS - Feature comparison between groups
+    features_to_analyze = ['completeness_percentage', 'qualifier', 'tree_number', 'log_enrollment']
+    plotter.binary_feature_comparison(
+        data=regression_data,
+        features=features_to_analyze,
+        target='requested',
+        save_name='baseline_feature_comparison.png',
+        path=DATA_PATHS['img']['regression']
     )
-    X_train = sparse.csr_matrix(X_train); X_test = sparse.csr_matrix(X_test)
-    X_design_train = sparse.hstack([X_train, W_train], format='csr')
-    X_design_test  = sparse.hstack([X_test,  W_test],  format='csr')
 
-    # CV or C - log loss for probabilistic calibration
-    Cs = np.array([0.01, 0.03, 0.1, 0.3, 1.0])
-    cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
-    clf = LogisticRegressionCV(
-        Cs=Cs, cv=cv, solver="saga", penalty="l2", scoring="neg_log_loss",
-        max_iter=5000, n_jobs=-1, fit_intercept=True, class_weight="balanced", refit=True
+    # 2. INDIVIDUAL LOGISTIC REGRESSION PLOTS
+    # Plot for completeness
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='completeness_percentage',
+        y='requested',
+        xlabel='Data Completeness (%)',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_completeness.png',
+        path=DATA_PATHS['img']['regression']
     )
-    clf.fit(X_design_train, y_train)
-    C_star = float(clf.C_[0])
-    logger.info(f"Selected C (prior var) = {C_star}")
 
-    p_hat = clf.predict_proba(X_design_test)[:, 1]
-    auc = roc_auc_score(y_test, p_hat)  # Use y_test, not y
-    ap = average_precision_score(y_test, p_hat)
-    brier = brier_score_loss(y_test, p_hat)
-    fpr, tpr, _ = roc_curve(y_test, p_hat)
-    y_pred = (p_hat >= 0.5).astype(int)
-    cm = confusion_matrix(y_test, y_pred)  # Use y_test, not y
-    cls_rep = classification_report(y_test, y_pred)
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred, zero_division=0)
-    recall = recall_score(y_test, y_pred, zero_division=0)
-    f1 = f1_score(y_test, y_pred, zero_division=0)
-    logger.info(f"Multilevel Model AUC = {auc:.3f}, AP = {ap:.3f}, Brier = {brier:.3f}")
-    logger.info(f"Confusion Matrix:\n{cm}")
-    logger.info(f"Classification Report:\n{cls_rep}")
-    # Extract coefficients
-    coef = clf.coef_.ravel()  # length p+R
-    p = len(features)
-    beta_fixed = coef[:p]
-    gamma_req = coef[p:]      # request effects (shrunk)
+    # Plot for document counts
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='document_count',
+        y='requested',
+        xlabel='Number of Documents',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_documents.png',
+        path=DATA_PATHS['img']['regression']
+    )
+
+    # Plot for qualifiers
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='qualifier',
+        y='requested',
+        xlabel='Number of Qualifiers',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_qualifiers.png',
+        path=DATA_PATHS['img']['regression']
+    )
+
+    # Plot for tree numbers
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='tree_number',
+        y='requested',
+        xlabel='Number of Tree Numbers',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_tree_numbers.png',
+        path=DATA_PATHS['img']['regression']
+    )
+
+    # Plot for enrollment
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='log_enrollment',
+        y='requested',
+        xlabel='Log(Enrollment + 1)',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_enrollment.png',
+        path=DATA_PATHS['img']['regression']
+    )
+
+    # 3. FIT MULTIPLE LOGISTIC REGRESSION MODEL
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score, 
+                                roc_curve, auc, confusion_matrix, classification_report,
+                                roc_auc_score, brier_score_loss)
+
+    # Prepare features
+    X = regression_data[['completeness_percentage', 'document_count', 'qualifier', 'tree_number', 'log_enrollment']]
+    y = regression_data['requested']
+
+    # Fit logistic regression
+    log_reg = LogisticRegression(random_state=42, solver='lbfgs', max_iter=200)
+    log_reg.fit(X, y)
+
+    # Make predictions
+    y_pred = log_reg.predict(X)
+    y_pred_proba = log_reg.predict_proba(X)[:, 1]
+
+    # Calculate metrics
+    accuracy = accuracy_score(y, y_pred)
+    precision = precision_score(y, y_pred, zero_division=0)
+    recall = recall_score(y, y_pred, zero_division=0)
+    f1 = f1_score(y, y_pred, zero_division=0)
+    fpr, tpr, _ = roc_curve(y, y_pred_proba)
+    auc_score = auc(fpr, tpr)
+    conf_matrix = confusion_matrix(y, y_pred)
+    brier_score = brier_score_loss(y, y_pred_proba)
+
+    # 4. COMPREHENSIVE CLASSIFICATION SUMMARY PLOT
     model_results = {
-        'confusion_matrix': cm.tolist(),
-        'accuracy': float(accuracy),           
-        'precision': float(precision),
-        'recall': float(recall),
-        'f1_score': float(f1),
-        'auc': float(auc),
+        'confusion_matrix': conf_matrix.tolist(),
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1_score': f1,
+        'auc': auc_score,
+        'coefficients': {
+            'completeness_percentage': log_reg.coef_[0][0],
+            'qualifier': log_reg.coef_[0][1], 
+            'log_enrollment': log_reg.coef_[0][2]
+        },
         'fpr': fpr.tolist(),
         'tpr': tpr.tolist(),
-        'predicted_probabilities': p_hat.tolist(),  # Test set predictions
-        'actual_labels': y_test.tolist(),           # FIXED: Use y_test, not y
-        'brier_score': float(brier),
-        'n_samples': len(y_test),                   # FIXED: Use len(y_test)
-        'n_positive': int(y_test.sum()),            # FIXED: Use y_test
-        'n_negative': int((1 - y_test).sum()),      # FIXED: Use y_test
-        'coefficients': {col: float(beta_fixed[i]) for i, col in enumerate(features)}
+        'predicted_probabilities': y_pred_proba.tolist(),
+        'actual_labels': y.tolist(),
+        'log_likelihood': -brier_score * len(y),  # Approximate
+        'aic': 2 * 4 - 2 * (-brier_score * len(y)),  # Approximate AIC
+        'n_samples': len(y),
+        'n_positive': y.sum(),
+        'n_negative': len(y) - y.sum(),
+        'brier_score': brier_score
     }
 
     plotter.classification_summary(
         model_results=model_results,
-        save_name='mm_enrollment_tree_number_classification_summary.png',
+        save_name='baseline_classification_summary.png',
         path=DATA_PATHS['img']['regression']
     )
+
+    # 5. PROBABILITY CALIBRATION PLOT
     plotter.probability_calibration_plot(
         model_results=model_results,
-        save_name='mm_enrollment_tree_number_probability_calibration.png',
+        save_name='baseline_probability_calibration.png',
         path=DATA_PATHS['img']['regression']
     )
-    os.makedirs(DATA_PATHS['results'], exist_ok=True)
 
-    # 1) fixed effects table (standardized scale)
-    fixed_tbl = pd.DataFrame({
-        'feature': features,
-        'coef_std': beta_fixed,
-        'OR_per_1SD': np.exp(beta_fixed)
-    })
-    fixed_tbl.to_csv(os.path.join(DATA_PATHS['results'], 'mm_enrollment_tree_number_fixed_effects.csv'), index=False)
+    # 6. SAVE STATISTICAL RESULTS
+    # Use statsmodels for detailed statistical output
+    X_sm = sm.add_constant(X)  # Add intercept
+    logit_model = sm.Logit(y, X_sm)
+    result = logit_model.fit(disp=0)
 
-    # 2) request effects (top/bottom 30 for readability)
-    inv_req_index = {j: rid for rid, j in req_index.items()}
-    req_df = pd.DataFrame({
-        'request_id': [inv_req_index[j] for j in range(len(gamma_req))],
-        'effect_logit': gamma_req,
-        'effect_OR': np.exp(gamma_req)
-    }).sort_values('effect_logit')
-    req_df.to_csv(os.path.join(DATA_PATHS['results'], 'mm_enrollment_tree_number_request_effects_full.csv'), index=False)
-    head = req_df.tail(30); tail = req_df.head(30)
-    head.to_csv(os.path.join(DATA_PATHS['results'], 'mm_enrollment_tree_number_request_effects_top30.csv'), index=False)
-    tail.to_csv(os.path.join(DATA_PATHS['results'], 'mm_enrollment_tree_number_request_effects_bottom30.csv'), index=False)
-    # 3) quick caterpillar plot
-    try:
-        plt.figure(figsize=(8, 5))
-        ordered = req_df.reset_index(drop=True)
-        idx = np.arange(len(ordered))
-        plt.plot(idx, ordered['effect_logit'].values, '.', ms=3)
-        plt.axhline(0, ls='--', c='k')
-        plt.xlabel('Requests (sorted)'); plt.ylabel('Effect on log-odds')
-        plt.tight_layout()
-        plt.savefig(os.path.join(DATA_PATHS['img']['regression'], 'mm_enrollment_tree_number_request_caterpillar.png'), dpi=150)
-        plt.close()
-    except Exception as e:
-        logger.warning(f"Caterpillar plot failed: {e}")
-    # 4) text summary
-    txt = f"""
-        MM Logistic Regression (enrollment + tree_number)
+    # Save detailed results
+    results_path = os.path.join(DATA_PATHS['results'], 'baseline_logistic_regression_summary.txt')
+    save_results(result.summary(), results_path)
+    logger.info(f"Saved detailed regression summary to {results_path}")
 
-        Data:
-        - Total trials: {len(y)}
-        - Train trials: {len(y_train)} 
-        - Test trials: {len(y_test)}
-        - Test requested: {int(y_test.sum())} ({y_test.mean()*100:.1f}%)
-        - Requests (columns in W): {info['n_requests']}
-        - Trials with membership: {info['n_with_membership']}
-        - Matrix density: {info['density']:.4f}
+    # Save model performance summary
+    performance_summary = f"""
+        BASELINE LOGISTIC REGRESSION ANALYSIS RESULTS
+        =============================================
 
-        Model:
-        - Design = [X | W] (sparse CSR)
-        - Penalty: L2 (Gaussian prior), solver='saga'
-        - Selected C (prior variance ~ tau^2): {C_star:.3f}
+        Dataset Information:
+        - Total trials analyzed: {len(y)}
+        - Requested trials: {y.sum()} ({y.mean()*100:.1f}%)
+        - Non-requested trials: {len(y) - y.sum()} ({(1-y.mean())*100:.1f}%)
 
-        Performance (test set):
-        - AUC: {auc:.3f}
-        - Average Precision: {ap:.3f}
-        - Brier Score: {brier:.3f}
+        Model Performance:
         - Accuracy: {accuracy:.3f}
         - Precision: {precision:.3f}
         - Recall: {recall:.3f}
         - F1-Score: {f1:.3f}
+        - AUC-ROC: {auc_score:.3f}
+        - Brier Score: {brier_score:.3f}
 
-        Fixed effects (std. scale):
-        {chr(10).join([f"  {feat}: {coef:.3f} (OR={np.exp(coef):.3f})" for feat, coef in zip(features, beta_fixed)])}
+        Feature Coefficients:
+        - Data Completeness: {log_reg.coef_[0][0]:.3f}
+        - Number of Qualifiers: {log_reg.coef_[0][1]:.3f}
+        - Log Enrollment: {log_reg.coef_[0][2]:.3f}
+        - Intercept: {log_reg.intercept_[0]:.3f}
 
-        Matrix Information:
-        - Total trials: {info['n_trials']}
-        - Total requests: {info['n_requests']}  
-        - Trials with request membership: {info['n_with_membership']}
-        - Matrix sparsity: {(1-info['density'])*100:.1f}% zeros
+        Interpretation:
+        - Higher completeness {"increases" if log_reg.coef_[0][0] > 0 else "decreases"} request probability
+        - More qualifiers {"increase" if log_reg.coef_[0][1] > 0 else "decrease"} request probability  
+        - Larger enrollment {"increases" if log_reg.coef_[0][2] > 0 else "decreases"} request probability
 
-        Files saved:
-        - Fixed effects: mm_enrollment_tree_number_fixed_effects.csv
-        - Request effects: mm_enrollment_tree_number_request_effects_full.csv (with top/bottom 30 CSVs)
-        """
-    save_results(txt, os.path.join(DATA_PATHS['results'], 'mm_enrollment_tree_number_summary.txt'))
-    logger.info("MM logistic regression with enrollment and tree_number finished")
-    return clf, model_results, {'scaler': scaler, 'req_index': req_index, 'info': info}
+        Confusion Matrix:
+        {conf_matrix}
 
-def tree_head_weight_matrix(regression_data: pd.DataFrame, logger=None, db: SQL_DatabaseManager=None) -> Tuple[sparse.csr_matrix, Dict[Any, int], Dict[str, Any]]:
+        Classification Report:
+        {classification_report(y, y_pred)}
     """
-    Function for weighted matrix based on tree heads. showing realtionship between the trials and tree heads.
-    (N x T) matrix where N is number of trials and T is number of tree heads.
+
+    performance_path = os.path.join(DATA_PATHS['results'], 'baseline_performance_summary.txt')
+    save_results(performance_summary, performance_path)
+    logger.info(f"Saved performance summary to {performance_path}")
+
+    logger.info("Baseline logistic regression analysis completed with visualizations")
+    
+    return result, model_results
+
+def build_weight_matrix(reg_data: pd.DataFrame, request_links: pd.DataFrame, logger=None) -> Tuple[sparse.csr_matrix, Dict[Any, int], Dict[str, Any]]:
+    """
+    Build a weighted matrix to get the relations between trials and requests.
+    (N x R) matrix where N is number of trials and R is number of requests.
     """
     if logger is None:
         setup_logging(mode='basic')
         logger = logging.getLogger(__name__)
 
-    logger.info("Starting tree head weight matrix analysis")
+    logger.info("Building weight matrix for trials and requests")
 
-    if db is None:
-        db = SQL_DatabaseManager(db_config=MY_DB_CONFIG, connection_name='my_database')
-        logger.info("Connected to My Database")
+    min_trials_per_request = 1
 
-    trial_ids = regression_data['nct_id'].tolist()
+    # align trial order
+    trial_ids = reg_data['nct_id'].tolist()
     trial_index = {tid: i for i, tid in enumerate(trial_ids)}
-    N = len(trial_ids)
 
-    # Fetch condition and intervention data
-    df_conditions = db.get_table_data(
-        columns=['nct_id', 'condition as downcase_mesh_term'],
-        table_name='conditions'
-    )
-    logger.info("Fetched condition data")
-
-    df_interventions = db.get_table_data(
-        columns=['nct_id', 'intervention as downcase_mesh_term'],
-        table_name='interventions_mesh_terms'
-    )
-    logger.info("Fetched intervention data")
-
-    # get mesh terms with tree
-    mesh_terms = db.get_table_data(
-        columns=['downcase_mesh_term', 'tree_number'],
-        table_name='mesh_terms'
-    )
-    logger.info("Fetched mesh terms data")
-
-    # Merge mesh terms with conditions and interventions
-    df_trials_downcase_mesh_term = pd.concat([df_conditions, df_interventions], ignore_index=True)
-    df_trials_mesh = pd.merge(df_trials_downcase_mesh_term, mesh_terms, on='downcase_mesh_term', how='inner')
-    logger.info("Merged trials with mesh terms")
-
-    df_trials_mesh = df_trials_mesh[df_trials_mesh['nct_id'].isin(trial_ids)]
-    logger.info(f"Filtered mesh data to {len(df_trials_mesh)} records for {N} trials")
-
-    # Extract tree heads
-    df_trials_mesh['tree_head'] = df_trials_mesh['tree_number'].apply(lambda x: extract_tree_head(x, level=2))
-    df_trials_mesh = df_trials_mesh.dropna(subset=['tree_head'])
-
-    # Get unique tree heads and create index
-    unique_tree_heads = df_trials_mesh['tree_head'].unique()
-    unique_tree_heads = [th for th in unique_tree_heads if th is not None]
-    tree_head_index = {th: j for j, th in enumerate(unique_tree_heads)}
-    T = len(unique_tree_heads)
-
-    logger.info(f"Matrix dimensions: {N} trials x {T} tree heads")
-
-    # Build weight matrix
-    rows, cols, data = [], [], []
-    trial_with_tree_heads = df_trials_mesh.groupby('nct_id')['tree_head'].apply(list).to_dict()
+    # pool requests with max(min_trials_per_request) trials
+    request_counts = request_links['request_id'].value_counts()
+    valid_requests = request_counts[request_counts >= min_trials_per_request].index.tolist()
+    req_links = request_links.copy()
     
+    # Count how many requests get pooled
+    n_pooled = len(request_counts) - len(valid_requests)
+    req_links.loc[~req_links['request_id'].isin(valid_requests), 'request_id'] = '_OTHER_'
+
+    # list requests
+    req_ids = sorted(req_links['request_id'].unique())
+    req_index = {rid: j for j, rid in enumerate(req_ids)}
+    R, N = len(req_ids), len(trial_ids)
+
+    logger.info(f"Matrix dimensions: {N} trials x {R} requests")
+
+    # trial with request list
+    trial_with_req_list = req_links.groupby('nct_id')['request_id'].apply(list).to_dict()
+
+    # build matrix
+    rows, cols, data = [], [], []
     with_membership = 0
-    for trial_id in trial_ids:  # Use trial_ids from regression_data to maintain order
-        tree_heads = trial_with_tree_heads.get(trial_id, [])
-        tree_heads = [th for th in tree_heads if th is not None and th in tree_head_index]
-        
-        if tree_heads:
+    for trial in trial_ids:
+        lst = trial_with_req_list.get(trial, [])
+        if lst:
             with_membership += 1
-            weight = 1.0 / len(tree_heads)
-            i = trial_index[trial_id]
-            for tree_head in tree_heads:
-                j = tree_head_index[tree_head]
+            w = 1.0 / len(lst)
+            i = trial_ids.index(trial)
+            for req in lst:
+                j = req_index[req]
                 rows.append(i)
                 cols.append(j)
-                data.append(weight)
+                data.append(w)
 
-    # Create sparse matrix with exact dimensions matching regression_data
-    W_tree = sparse.csr_matrix((data, (rows, cols)), shape=(N, T), dtype=np.float32)
-    logger.info(f"Built aligned tree head weight matrix: {W_tree.shape} with {len(rows)} non-zero entries")
-
+    W = sparse.csr_matrix((data, (rows, cols)), shape=(N, R), dtype=np.float32)
+    logger.info(f"Weight matrix built with {W.nnz} non-zero entries")
+    
     info = {
         'n_trials': N,
-        'n_tree_heads': T,
-        'density': len(rows) / (N * T) if N * T > 0 else 0,
-        'n_with_membership': with_membership
+        'n_requests': R,
+        'n_with_membership': with_membership,
+        'density': W.nnz / (N * R),
+        'pooled': n_pooled,  # Added missing key
+        'rows_with_membership': with_membership  # Added missing key (alias)
     }
+    return W, trial_index, info
 
-    return W_tree, tree_head_index, info
-
-def multilevel_logistic_regression_with_tree_id(logger=None, db: SQL_DatabaseManager=None, plotter: MasterPlotter=None):
+def multilevel_logistic_regression(logger=None, db: SQL_DatabaseManager=None, plotter: MasterPlotter=None, random_state=42, test_size=0.3):
     """
     Multilevel-Membership hierarchical logistic Regression via fast MAP (ridge) approximation.
     - Row = trial
     - y = requested (0/1)
-    - X = features (completeness, qualifiers, tree_number, enrollment)
+    - X = features (completeness, document_count, qualifiers, tree_number, enrollment)
     - W = weight matrix (trials x requests)
-    - T = weight matrix (trials x tree heads)
-    - Design = [X | T], fit with L2 (Gaussian) prior on coefficients, solver = ''
+    - Design = [X | W], fit with L2 (Gaussian) prior on coefficients, solver = ''
     """
     if logger is None:
         setup_logging(mode='basic')
         logger = logging.getLogger(__name__)
 
-    logger.info("Starting multilevel logistic regression with tree_id analysis")
+    logger.info("Starting multilevel logistic regression analysis")
 
     if db is None:
         db = SQL_DatabaseManager(db_config=MY_DB_CONFIG, connection_name='my_database')
         logger.info("Connected to My Database")
-
     if plotter is None:
         plotter = MasterPlotter()
         logger.info("Initialized MasterPlotter")
@@ -1654,208 +1425,288 @@ def multilevel_logistic_regression_with_tree_id(logger=None, db: SQL_DatabaseMan
     if merged_data is None or merged_data.empty:
         logger.error("Merged data is None or empty")
         return
-    
+
     # Mark requested trials
     merged_data['requested'] = merged_data['nct_id'].isin(request_links['nct_id']).astype(int)
-    regression_data = merged_data.dropna(subset=['enrollment', 'completeness_percentage', 'document_count', 'qualifier', 'tree_number', 'requested'])
+
+    # Prepare data for regression
+    regression_data = merged_data.dropna(subset=['enrollment', 'completeness_percentage', 'qualifier', 'tree_number', 'requested'])
     regression_data = regression_data[regression_data['enrollment'] > 0]
+    
+    # Log-transform enrollment for better distribution
     regression_data['log_enrollment'] = np.log1p(regression_data['enrollment'])
 
     logger.info(f"Analysis dataset: {len(regression_data)} trials, {regression_data['requested'].sum()} requested")
 
-    features = ['completeness_percentage', 'document_count', 'qualifier', 'tree_number', 'log_enrollment']
-    X = regression_data[features].to_numpy(dtype=np.float32)
-    y = regression_data['requested'].to_numpy(dtype=np.int32)
-    
-    # Standardize features
-    scaler = StandardScaler()
-    Xs = scaler.fit_transform(X).astype(np.float32)
-
-    # Build weight matrices
-    W_tree, tree_index, info_tree = tree_head_weight_matrix(regression_data, logger, db)
-    logger.info(f"Tree head weight matrix info: {info_tree}")
-
-    # Verify matrix dimensions match
-    logger.info(f"Matrix shapes - X: {Xs.shape}, y: {y.shape}, W_tree: {W_tree.shape}")
-    if W_tree.shape[0] != len(y):
-        logger.error(f"Matrix dimension mismatch: W_tree({W_tree.shape}), y({len(y)})")
-        return
-    # train test split
-    X_train, X_test, y_train, y_test, W_tree_train, W_tree_test = train_test_split(
-        Xs, y, W_tree, test_size=0.3, stratify=y, random_state=42
+    # 1. EXPLORATORY PLOTS - Feature comparison between groups
+    features_to_analyze = ['completeness_percentage', 'qualifier', 'tree_number', 'log_enrollment']
+    plotter.binary_feature_comparison(
+        data=regression_data,
+        features=features_to_analyze,
+        target='requested',
+        save_name='baseline_feature_comparison.png',
+        path=DATA_PATHS['img']['regression']
     )
 
-    # Convert to sparse matrices
-    X_train = sparse.csr_matrix(X_train); X_test = sparse.csr_matrix(X_test)
-    X_design_train = sparse.hstack([X_train, W_tree_train], format='csr')
-    X_design_test  = sparse.hstack([X_test,  W_tree_test],  format='csr')
-
-    # CV or C - log loss for probabilistic calibration
-    clf = LogisticRegressionCV(
-        Cs=np.array([0.01, 0.03, 0.1, 0.3, 1.0]), cv=5, solver="saga", penalty="l2",
-        scoring="neg_log_loss", max_iter=5000, n_jobs=-1, fit_intercept=True,
-        class_weight="balanced", refit=True
+    # 2. INDIVIDUAL LOGISTIC REGRESSION PLOTS
+    # Plot for completeness
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='completeness_percentage',
+        y='requested',
+        xlabel='Data Completeness (%)',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_completeness.png',
+        path=DATA_PATHS['img']['regression']
     )
-    clf.fit(X_design_train, y_train)
-    C_star = float(clf.C_[0])
-    logger.info(f"Selected C (prior var) = {C_star}")
-    
-    # Model evaluation
-    p_hat = clf.predict_proba(X_design_test)[:, 1]
-    auc = roc_auc_score(y_test, p_hat)
-    ap = average_precision_score(y_test, p_hat)
-    brier = brier_score_loss(y_test, p_hat)
-    fpr, tpr, _ = roc_curve(y_test, p_hat)
-    y_pred = (p_hat >= 0.5).astype(int)
-    cm = confusion_matrix(y_test, y_pred)
-    cls_rep = classification_report(y_test, y_pred)
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred, zero_division=0)
-    recall = recall_score(y_test, y_pred, zero_division=0)
-    f1 = f1_score(y_test, y_pred, zero_division=0)
-    logger.info(f"Multilevel Model AUC = {auc:.3f}, AP = {ap:.3f}, Brier = {brier:.3f}")
-    logger.info(f"Confusion Matrix:\n{cm}")
-    logger.info(f"Classification Report:\n{cls_rep}")
-    logger.info(f"Accuracy = {accuracy:.3f}, Precision = {precision:.3f}, Recall = {recall:.3f}, F1 = {f1:.3f}")
 
-    # Extract coefficients
-    coef = clf.coef_.ravel()  # length p+T
-    p = len(features)
-    beta_fixed = coef[:p]
-    gamma_tree = coef[p:]     # tree head effects (shrunk)
+    # Plot for document counts
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='document_count',
+        y='requested',
+        xlabel='Number of Documents',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_documents.png',
+        path=DATA_PATHS['img']['regression']
+    )
+
+    # Plot for qualifiers
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='qualifier',
+        y='requested',
+        xlabel='Number of Qualifiers',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_qualifiers.png',
+        path=DATA_PATHS['img']['regression']
+    )
+
+    # Plot for tree numbers
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='tree_number',
+        y='requested',
+        xlabel='Number of Tree Numbers',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_tree_numbers.png',
+        path=DATA_PATHS['img']['regression']
+    )
+
+    # Plot for enrollment
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='log_enrollment',
+        y='requested',
+        xlabel='Log(Enrollment + 1)',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_enrollment.png',
+        path=DATA_PATHS['img']['regression']
+    )
+
+    # 3. FIT MULTIPLE LOGISTIC REGRESSION MODEL
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score, 
+                                roc_curve, auc, confusion_matrix, classification_report,
+                                roc_auc_score, brier_score_loss)
+
+    # Prepare features
+    X = regression_data[['completeness_percentage', 'document_count', 'qualifier', 'tree_number', 'log_enrollment']]
+    y = regression_data['requested']
+
+    # Fit logistic regression
+    log_reg = LogisticRegression(random_state=42, solver='lbfgs', max_iter=200)
+    log_reg.fit(X, y)
+
+    # Make predictions
+    y_pred = log_reg.predict(X)
+    y_pred_proba = log_reg.predict_proba(X)[:, 1]
+
+    # Calculate metrics
+    accuracy = accuracy_score(y, y_pred)
+    precision = precision_score(y, y_pred, zero_division=0)
+    recall = recall_score(y, y_pred, zero_division=0)
+    f1 = f1_score(y, y_pred, zero_division=0)
+    fpr, tpr, _ = roc_curve(y, y_pred_proba)
+    auc_score = auc(fpr, tpr)
+    conf_matrix = confusion_matrix(y, y_pred)
+    brier_score = brier_score_loss(y, y_pred_proba)
+
+    # 4. COMPREHENSIVE CLASSIFICATION SUMMARY PLOT
     model_results = {
-        'confusion_matrix': cm.tolist(),
-        'accuracy': float(accuracy),
-        'precision': float(precision),
-        'recall': float(recall),
-        'f1': float(f1),
-        'beta_fixed': beta_fixed.tolist(),
-        'gamma_tree': gamma_tree.tolist(),
-        'auc': float(auc),
+        'confusion_matrix': conf_matrix.tolist(),
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1_score': f1,
+        'auc': auc_score,
+        'coefficients': {
+            'completeness_percentage': log_reg.coef_[0][0],
+            'qualifier': log_reg.coef_[0][1], 
+            'log_enrollment': log_reg.coef_[0][2]
+        },
         'fpr': fpr.tolist(),
         'tpr': tpr.tolist(),
-        'predicted_probabilities': p_hat.tolist(),
-        'actual_labels': y_test.tolist(),
-        'brier_score': float(brier),
-        'n_samples': len(y_test),
-        'n_positive': int(y_test.sum()),
-        'n_negative': int((1 - y_test).sum()),
-        'coefficients': {col: float(beta_fixed[i]) for i, col in enumerate(features)}
+        'predicted_probabilities': y_pred_proba.tolist(),
+        'actual_labels': y.tolist(),
+        'log_likelihood': -brier_score * len(y),  # Approximate
+        'aic': 2 * 4 - 2 * (-brier_score * len(y)),  # Approximate AIC
+        'n_samples': len(y),
+        'n_positive': y.sum(),
+        'n_negative': len(y) - y.sum(),
+        'brier_score': brier_score
     }
 
     plotter.classification_summary(
         model_results=model_results,
-        save_name='mm_map_tree_id_classification_summary.png',
+        save_name='baseline_classification_summary.png',
         path=DATA_PATHS['img']['regression']
     )
 
+    # 5. PROBABILITY CALIBRATION PLOT
     plotter.probability_calibration_plot(
         model_results=model_results,
-        save_name='mm_map_tree_id_probability_calibration.png',
+        save_name='baseline_probability_calibration.png',
         path=DATA_PATHS['img']['regression']
     )
 
-    os.makedirs(DATA_PATHS['results'], exist_ok=True)
-    # 1) fixed effects table (standardized scale)
-    fixed_tbl = pd.DataFrame({
-        'feature': features,
-        'coef_std': beta_fixed,
-        'OR_per_1SD': np.exp(beta_fixed)
-    })
-    fixed_tbl.to_csv(os.path.join(DATA_PATHS['results'], 'mm_map_tree_id_fixed_effects.csv'), index=False)
-    # 2) tree head effects (top/bottom 30 for readability)
-    inv_tree_index = {j: th for th, j in tree_index.items()}
-    tree_df = pd.DataFrame({
-        'tree_head': [inv_tree_index[j] for j in range(len(gamma_tree))],
-        'effect_logit': gamma_tree,
-    })
-    tree_df.to_csv(os.path.join(DATA_PATHS['results'], 'mm_map_tree_id_tree_head_effects.csv'), index=False)
+    # 6. SAVE STATISTICAL RESULTS
+    # Use statsmodels for detailed statistical output
+    X_sm = sm.add_constant(X)  # Add intercept
+    logit_model = sm.Logit(y, X_sm)
+    result = logit_model.fit(disp=0)
 
-    head = tree_df.tail(30); tail = tree_df.head(30)
-    head.to_csv(os.path.join(DATA_PATHS['results'], 'mm_map_tree_id_tree_head_effects_top30.csv'), index=False)
-    tail.to_csv(os.path.join(DATA_PATHS['results'], 'mm_map_tree_id_tree_head_effects_bottom30.csv'), index=False)
+    # Save detailed results
+    results_path = os.path.join(DATA_PATHS['results'], 'baseline_logistic_regression_summary.txt')
+    save_results(result.summary(), results_path)
+    logger.info(f"Saved detailed regression summary to {results_path}")
 
-    # 3) quick caterpillar plot
-    try:
-        plt.figure(figsize=(8, 5))
-        ordered = tree_df.sort_values('effect_logit').reset_index(drop=True)
-        idx = np.arange(len(ordered))
-        plt.plot(idx, ordered['effect_logit'].values, '.', ms=3)
-        plt.axhline(0, ls='--', c='k')
-        plt.xlabel('Tree heads (sorted)'); plt.ylabel('Effect on log-odds')
-        plt.tight_layout()
-        plt.savefig(os.path.join(DATA_PATHS['img']['regression'], 'mm_map_tree_id_caterpillar.png'), dpi=150)
-        plt.close()
-    except Exception as e:
-        logger.warning(f"Caterpillar plot failed: {e}")
-    # 4) text summary
-    txt = f"""
-        MAP (Ridge) Multiple-Membership Logistic (Trial-level with Tree ID)
+    # Save model performance summary
+    performance_summary = f"""
+        BASELINE LOGISTIC REGRESSION ANALYSIS RESULTS
         =============================================
-        Data:
-        - Total trials: {len(y)}
-        - Train trials: {len(y_train)}
-        - Test trials: {len(y_test)}
-        - Test requested: {int(y_test.sum())} ({y_test.mean()*100:.1f}%)
-        - Tree heads (columns in W): {info_tree['n_tree_heads']}
-        - Trials with tree head membership: {info_tree['n_with_membership']}
-        - Matrix density: {info_tree['density']:.4f}
 
-        Model:
-        - Design = [X_std | W_tree] (sparse CSR)
-        - Penalty: L2 (Gaussian prior), solver='saga'
-        - Selected C (prior variance ~ tau^2): {C_star:.3f}
+        Dataset Information:
+        - Total trials analyzed: {len(y)}
+        - Requested trials: {y.sum()} ({y.mean()*100:.1f}%)
+        - Non-requested trials: {len(y) - y.sum()} ({(1-y.mean())*100:.1f}%)
 
-        Performance (test set):
-        - AUC: {auc:.3f}
-        - Average Precision: {ap:.3f}
-        - Brier Score: {brier:.3f}
+        Model Performance:
         - Accuracy: {accuracy:.3f}
         - Precision: {precision:.3f}
         - Recall: {recall:.3f}
         - F1-Score: {f1:.3f}
+        - AUC-ROC: {auc_score:.3f}
+        - Brier Score: {brier_score:.3f}
 
-        Fixed effects (std. scale):
-        {chr(10).join([f"  {feat}: {coef:.3f} (OR={np.exp(coef):.3f})" for feat, coef in zip(features, beta_fixed)])}
+        Feature Coefficients:
+        - Data Completeness: {log_reg.coef_[0][0]:.3f}
+        - Number of Qualifiers: {log_reg.coef_[0][1]:.3f}
+        - Log Enrollment: {log_reg.coef_[0][2]:.3f}
+        - Intercept: {log_reg.intercept_[0]:.3f}
 
-        Files saved:
-        - Fixed effects: mm_map_tree_id_fixed_effects.csv
-        - Tree head effects: mm_map_tree_id_tree_head_effects.csv (with top/bottom 30 CSVs)
-        """
-    save_results(txt, os.path.join(DATA_PATHS['results'], 'mm_map_tree_id_summary.txt'))
-    logger.info("MAP (ridge) multilevel logistic regression with tree ID finished")
+        Interpretation:
+        - Higher completeness {"increases" if log_reg.coef_[0][0] > 0 else "decreases"} request probability
+        - More qualifiers {"increase" if log_reg.coef_[0][1] > 0 else "decrease"} request probability  
+        - Larger enrollment {"increases" if log_reg.coef_[0][2] > 0 else "decreases"} request probability
 
-    train_sizes, train_scores, test_scores = learning_curve(
-        clf, X_design_train, y_train,
-        cv=5, scoring="roc_auc", n_jobs=-1,
-        train_sizes=np.linspace(0.1, 1.0, 5)
-    )
-    plt.plot(train_sizes, train_scores.mean(axis=1), label="train AUC")
-    plt.plot(train_sizes, test_scores.mean(axis=1), label="cv AUC")
-    plt.legend()
-    plt.savefig(os.path.join(DATA_PATHS['img']['regression'], 'mm_map_tree_id_learning_curve.png'), dpi=150)
-    plt.close()
+        Confusion Matrix:
+        {conf_matrix}
 
-def multilevel_logistic_regression_with_tree_id_weight_and_request_weights(logger=None, db: SQL_DatabaseManager=None, plotter: MasterPlotter=None):
+        Classification Report:
+        {classification_report(y, y_pred)}
     """
-    Multilevel-Membership hierarchical logistic Regression via fast MAP (ridge) approximation.
-    - Row = trial
-    - y = requested (0/1)
-    - X = features (completeness, qualifiers, tree_number, enrollment)
-    - W = weight matrix (trials x requests)
-    - T = weight matrix (trials x tree heads)
-    - Design = [X | W | T], fit with L2 (Gaussian) prior on coefficients, solver = ''
+
+    performance_path = os.path.join(DATA_PATHS['results'], 'baseline_performance_summary.txt')
+    save_results(performance_summary, performance_path)
+    logger.info(f"Saved performance summary to {performance_path}")
+
+    logger.info("Baseline logistic regression analysis completed with visualizations")
+    
+    return result, model_results
+
+def build_weight_matrix(reg_data: pd.DataFrame, request_links: pd.DataFrame, logger=None) -> Tuple[sparse.csr_matrix, Dict[Any, int], Dict[str, Any]]:
+    """
+    Build a weighted matrix to get the relations between trials and requests.
+    (N x R) matrix where N is number of trials and R is number of requests.
     """
     if logger is None:
         setup_logging(mode='basic')
         logger = logging.getLogger(__name__)
 
-    logger.info("Starting multilevel logistic regression with tree_id analysis")
+    logger.info("Building weight matrix for trials and requests")
+
+    min_trials_per_request = 1
+
+    # align trial order
+    trial_ids = reg_data['nct_id'].tolist()
+    trial_index = {tid: i for i, tid in enumerate(trial_ids)}
+
+    # pool requests with max(min_trials_per_request) trials
+    request_counts = request_links['request_id'].value_counts()
+    valid_requests = request_counts[request_counts >= min_trials_per_request].index.tolist()
+    req_links = request_links.copy()
+    
+    # Count how many requests get pooled
+    n_pooled = len(request_counts) - len(valid_requests)
+    req_links.loc[~req_links['request_id'].isin(valid_requests), 'request_id'] = '_OTHER_'
+
+    # list requests
+    req_ids = sorted(req_links['request_id'].unique())
+    req_index = {rid: j for j, rid in enumerate(req_ids)}
+    R, N = len(req_ids), len(trial_ids)
+
+    logger.info(f"Matrix dimensions: {N} trials x {R} requests")
+
+    # trial with request list
+    trial_with_req_list = req_links.groupby('nct_id')['request_id'].apply(list).to_dict()
+
+    # build matrix
+    rows, cols, data = [], [], []
+    with_membership = 0
+    for trial in trial_ids:
+        lst = trial_with_req_list.get(trial, [])
+        if lst:
+            with_membership += 1
+            w = 1.0 / len(lst)
+            i = trial_ids.index(trial)
+            for req in lst:
+                j = req_index[req]
+                rows.append(i)
+                cols.append(j)
+                data.append(w)
+
+    W = sparse.csr_matrix((data, (rows, cols)), shape=(N, R), dtype=np.float32)
+    logger.info(f"Weight matrix built with {W.nnz} non-zero entries")
+    
+    info = {
+        'n_trials': N,
+        'n_requests': R,
+        'n_with_membership': with_membership,
+        'density': W.nnz / (N * R),
+        'pooled': n_pooled,  # Added missing key
+        'rows_with_membership': with_membership  # Added missing key (alias)
+    }
+    return W, trial_index, info
+
+def multilevel_logistic_regression(logger=None, db: SQL_DatabaseManager=None, plotter: MasterPlotter=None, random_state=42, test_size=0.3):
+    """
+    Multilevel-Membership hierarchical logistic Regression via fast MAP (ridge) approximation.
+    - Row = trial
+    - y = requested (0/1)
+    - X = features (completeness, document_count, qualifiers, tree_number, enrollment)
+    - W = weight matrix (trials x requests)
+    - Design = [X | W], fit with L2 (Gaussian) prior on coefficients, solver = ''
+    """
+    if logger is None:
+        setup_logging(mode='basic')
+        logger = logging.getLogger(__name__)
+
+    logger.info("Starting multilevel logistic regression analysis")
 
     if db is None:
         db = SQL_DatabaseManager(db_config=MY_DB_CONFIG, connection_name='my_database')
         logger.info("Connected to My Database")
-
     if plotter is None:
         plotter = MasterPlotter()
         logger.info("Initialized MasterPlotter")
@@ -1865,228 +1716,380 @@ def multilevel_logistic_regression_with_tree_id_weight_and_request_weights(logge
     if merged_data is None or merged_data.empty:
         logger.error("Merged data is None or empty")
         return
-    
+
     # Mark requested trials
     merged_data['requested'] = merged_data['nct_id'].isin(request_links['nct_id']).astype(int)
-    regression_data = merged_data.dropna(subset=['enrollment', 'completeness_percentage', 'document_count', 'qualifier', 'tree_number', 'requested'])
+
+    # Prepare data for regression
+    regression_data = merged_data.dropna(subset=['enrollment', 'completeness_percentage', 'qualifier', 'tree_number', 'requested'])
     regression_data = regression_data[regression_data['enrollment'] > 0]
+    
+    # Log-transform enrollment for better distribution
     regression_data['log_enrollment'] = np.log1p(regression_data['enrollment'])
 
     logger.info(f"Analysis dataset: {len(regression_data)} trials, {regression_data['requested'].sum()} requested")
 
-    features = ['completeness_percentage', 'document_count', 'qualifier', 'tree_number', 'log_enrollment']
-    X = regression_data[features].to_numpy(dtype=np.float32)
-    y = regression_data['requested'].to_numpy(dtype=np.int32)
-    
-    # Standardize features
-    scaler = StandardScaler()
-    Xs = scaler.fit_transform(X).astype(np.float32)
-
-    # Build weight matrices - FIXED: Use the same regression_data for both matrices
-    W, req_index, info_req = build_weight_matrix(regression_data, request_links, logger)
-    W_tree, tree_index, info_tree = tree_head_weight_matrix(regression_data, logger, db)
-    
-    logger.info(f"Weight matrix info (requests): {info_req}")
-    logger.info(f"Weight matrix info (tree heads): {info_tree}")
-    
-    # FIXED: Verify matrix dimensions match
-    logger.info(f"Matrix shapes - X: {Xs.shape}, y: {y.shape}, W: {W.shape}, W_tree: {W_tree.shape}")
-    
-    if W.shape[0] != W_tree.shape[0] or W.shape[0] != len(y):
-        logger.error(f"Matrix dimension mismatch: W({W.shape}), W_tree({W_tree.shape}), y({len(y)})")
-        return
-
-    # train test split
-    X_train, X_test, y_train, y_test, W_train, W_test, W_tree_train, W_tree_test = train_test_split(
-        Xs, y, W, W_tree, test_size=0.3, stratify=y, random_state=42
+    # 1. EXPLORATORY PLOTS - Feature comparison between groups
+    features_to_analyze = ['completeness_percentage', 'qualifier', 'tree_number', 'log_enrollment']
+    plotter.binary_feature_comparison(
+        data=regression_data,
+        features=features_to_analyze,
+        target='requested',
+        save_name='baseline_feature_comparison.png',
+        path=DATA_PATHS['img']['regression']
     )
 
-    # Convert to sparse matrices
-    X_train = sparse.csr_matrix(X_train); X_test = sparse.csr_matrix(X_test)
-    X_design_train = sparse.hstack([X_train, W_train, W_tree_train], format='csr')
-    X_design_test  = sparse.hstack([X_test,  W_test,  W_tree_test],  format='csr')
-
-    # CV or C - log loss for probabilistic calibration
-    clf = LogisticRegressionCV(
-        Cs=np.array([0.01, 0.03, 0.1, 0.3, 1.0]), cv=5, solver="saga", penalty="l2",
-        scoring="neg_log_loss", max_iter=5000, n_jobs=-1, fit_intercept=True,
-        class_weight="balanced", refit=True
+    # 2. INDIVIDUAL LOGISTIC REGRESSION PLOTS
+    # Plot for completeness
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='completeness_percentage',
+        y='requested',
+        xlabel='Data Completeness (%)',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_completeness.png',
+        path=DATA_PATHS['img']['regression']
     )
-    clf.fit(X_design_train, y_train)
-    C_star = float(clf.C_[0])
-    logger.info(f"Selected C (prior var) = {C_star}")
 
-    # Model evaluation
-    p_hat = clf.predict_proba(X_design_test)[:, 1]
-    auc = roc_auc_score(y_test, p_hat)
-    ap = average_precision_score(y_test, p_hat)
-    brier = brier_score_loss(y_test, p_hat)
-    fpr, tpr, _ = roc_curve(y_test, p_hat)
-    y_pred = (p_hat >= 0.5).astype(int)
-    cm = confusion_matrix(y_test, y_pred)
-    cls_rep = classification_report(y_test, y_pred)
-    accuracy = accuracy_score(y_test, y_pred)
-    precision = precision_score(y_test, y_pred, zero_division=0)
-    recall = recall_score(y_test, y_pred, zero_division=0)
-    f1 = f1_score(y_test, y_pred, zero_division=0)
-    logger.info(f"Multilevel Model AUC = {auc:.3f}, AP = {ap:.3f}, Brier = {brier:.3f}")
-    logger.info(f"Confusion Matrix:\n{cm}")
+    # Plot for document counts
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='document_count',
+        y='requested',
+        xlabel='Number of Documents',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_documents.png',
+        path=DATA_PATHS['img']['regression']
+    )
 
-    # Extract coefficients
-    coef = clf.coef_.ravel()  # length p+R+T
-    p = len(features)
-    beta_fixed = coef[:p]
-    gamma_req = coef[p:p+W.shape[1]]      # request effects (shrunk)
-    delta_tree = coef[p+W.shape[1]:]       # tree head effects (shrunk)
+    # Plot for qualifiers
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='qualifier',
+        y='requested',
+        xlabel='Number of Qualifiers',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_qualifiers.png',
+        path=DATA_PATHS['img']['regression']
+    )
 
+    # Plot for tree numbers
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='tree_number',
+        y='requested',
+        xlabel='Number of Tree Numbers',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_tree_numbers.png',
+        path=DATA_PATHS['img']['regression']
+    )
+
+    # Plot for enrollment
+    plotter.logistic_regression_plot(
+        data=regression_data,
+        x='log_enrollment',
+        y='requested',
+        xlabel='Log(Enrollment + 1)',
+        ylabel='Probability of Being Requested',
+        save_name='logistic_enrollment.png',
+        path=DATA_PATHS['img']['regression']
+    )
+
+    # 3. FIT MULTIPLE LOGISTIC REGRESSION MODEL
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.metrics import (accuracy_score, precision_score, recall_score, f1_score, 
+                                roc_curve, auc, confusion_matrix, classification_report,
+                                roc_auc_score, brier_score_loss)
+
+    # Prepare features
+    X = regression_data[['completeness_percentage', 'document_count', 'qualifier', 'tree_number', 'log_enrollment']]
+    y = regression_data['requested']
+
+    # Fit logistic regression
+    log_reg = LogisticRegression(random_state=42, solver='lbfgs', max_iter=200)
+    log_reg.fit(X, y)
+
+    # Make predictions
+    y_pred = log_reg.predict(X)
+    y_pred_proba = log_reg.predict_proba(X)[:, 1]
+
+    # Calculate metrics
+    accuracy = accuracy_score(y, y_pred)
+    precision = precision_score(y, y_pred, zero_division=0)
+    recall = recall_score(y, y_pred, zero_division=0)
+    f1 = f1_score(y, y_pred, zero_division=0)
+    fpr, tpr, _ = roc_curve(y, y_pred_proba)
+    auc_score = auc(fpr, tpr)
+    conf_matrix = confusion_matrix(y, y_pred)
+   
+    brier_score = brier_score_loss(y, y_pred_proba)
+
+    # 4. COMPREHENSIVE CLASSIFICATION SUMMARY PLOT
     model_results = {
-        'confusion_matrix': cm.tolist(),
-        'accuracy': float(accuracy),           
-        'precision': float(precision),
-        'recall': float(recall),
-        'f1_score': float(f1),
-        'auc': float(auc),
+        'confusion_matrix': conf_matrix.tolist(),
+        'accuracy': accuracy,
+        'precision': precision,
+        'recall': recall,
+        'f1_score': f1,
+        'auc': auc_score,
+        'coefficients': {
+            'completeness_percentage': log_reg.coef_[0][0],
+            'qualifier': log_reg.coef_[0][1], 
+            'log_enrollment': log_reg.coef_[0][2]
+        },
         'fpr': fpr.tolist(),
         'tpr': tpr.tolist(),
-        'predicted_probabilities': p_hat.tolist(),  # Test set predictions
-        'actual_labels': y_test.tolist(),           # FIXED: Use y_test, not y
-        'brier_score': float(brier),
-        'n_samples': len(y_test),                   # FIXED: Use len(y_test)
-        'n_positive': int(y_test.sum()),            # FIXED: Use y_test
-        'n_negative': int((1 - y_test).sum()),      # FIXED: Use y_test
-        'coefficients': {col: float(beta_fixed[i]) for i, col in enumerate(features)}
+        'predicted_probabilities': y_pred_proba.tolist(),
+        'actual_labels': y.tolist(),
+        'log_likelihood': -brier_score * len(y),  # Approximate
+        'aic': 2 * 4 - 2 * (-brier_score * len(y)),  # Approximate AIC
+        'n_samples': len(y),
+        'n_positive': y.sum(),
+        'n_negative': len(y) - y.sum(),
+        'brier_score': brier_score
     }
 
     plotter.classification_summary(
         model_results=model_results,
-        save_name='combined_model_classification_summary.png',
+        save_name='baseline_classification_summary.png',
         path=DATA_PATHS['img']['regression']
     )
 
+    # 5. PROBABILITY CALIBRATION PLOT
     plotter.probability_calibration_plot(
         model_results=model_results,
-        save_name='combined_model_probability_calibration.png',
+        save_name='baseline_probability_calibration.png',
         path=DATA_PATHS['img']['regression']
     )
 
-    os.makedirs(DATA_PATHS['results'], exist_ok=True)
+    # 6. SAVE STATISTICAL RESULTS
+    # Use statsmodels for detailed statistical output
+    X_sm = sm.add_constant(X)  # Add intercept
+    logit_model = sm.Logit(y, X_sm)
+    result = logit_model.fit(disp=0)
 
-    # 1) fixed effects table (standardized scale)
-    fixed_tbl = pd.DataFrame({
-        'feature': features,
-        'coef_std': beta_fixed,
-        'OR_per_1SD': np.exp(beta_fixed)
-    })
+    # Save detailed results
+    results_path = os.path.join(DATA_PATHS['results'], 'baseline_logistic_regression_summary.txt')
+    save_results(result.summary(), results_path)
+    logger.info(f"Saved detailed regression summary to {results_path}")
 
-    fixed_tbl.to_csv(os.path.join(DATA_PATHS['results'], 'combined_model_fixed_effects.csv'), index=False)
+    # Save model performance summary
+    performance_summary = f"""
+        BASELINE LOGISTIC REGRESSION ANALYSIS RESULTS
+        =============================================
 
-    # 2) request effects (top/bottom 30 for readability)
-    inv_req_index = {j: rid for rid, j in req_index.items()}
-    req_df = pd.DataFrame({
-        'request_id': [inv_req_index[j] for j in range(len(gamma_req))],
-        'effect_logit': gamma_req,
-        'effect_OR': np.exp(gamma_req)
-    }).sort_values('effect_logit')
+        Dataset Information:
+        - Total trials analyzed: {len(y)}
+        - Requested trials: {y.sum()} ({y.mean()*100:.1f}%)
+        - Non-requested trials: {len(y) - y.sum()} ({(1-y.mean())*100:.1f}%)
 
-    req_df.to_csv(os.path.join(DATA_PATHS['results'], 'combined_model_request_effects_full.csv'), index=False)
-    head = req_df.tail(30); tail = req_df.head(30)
-    head.to_csv(os.path.join(DATA_PATHS['results'], 'combined_model_request_effects_head.csv'), index=False)
-    tail.to_csv(os.path.join(DATA_PATHS['results'], 'combined_model_request_effects_tail.csv'), index=False)
-
-    # 3) tree head effects (top/bottom 30 for readability)
-    inv_tree_index = {j: th for th, j in tree_index.items()}
-    tree_df = pd.DataFrame({
-        'tree_head': [inv_tree_index[j] for j in range(len(delta_tree))],
-        'effect_logit': delta_tree,
-        'effect_OR': np.exp(delta_tree)
-    }).sort_values('effect_logit')
-    tree_df.to_csv(os.path.join(DATA_PATHS['results'], 'combined_model_effects_full.csv'), index=False)
-    head = tree_df.tail(30); tail = tree_df.head(30)
-    head.to_csv(os.path.join(DATA_PATHS['results'], 'combined_model_effects_head.csv'), index=False)
-    tail.to_csv(os.path.join(DATA_PATHS['results'], 'combined_model_effects_tail.csv'), index=False)
-
-    # 4) quick caterpillar plot for requests
-    try:
-        plt.figure(figsize=(8, 5))
-        ordered = req_df.reset_index(drop=True)
-        idx = np.arange(len(ordered))
-        plt.plot(idx, ordered['effect_logit'].values, '.', ms=3)
-        plt.axhline(0, ls='--', c='k')
-        plt.xlabel('Requests (sorted)'); plt.ylabel('Effect on log-odds')
-        plt.tight_layout()
-        plt.savefig(os.path.join(DATA_PATHS['img']['regression'], 'combined_model_request_caterpillar.png'), dpi=150)
-        plt.close()
-    except Exception as e:
-        logger.warning(f"Caterpillar plot for requests failed: {e}")
-
-    # 5) quick caterpillar plot for tree heads
-    try:
-        plt.figure(figsize=(8, 5))
-        ordered = tree_df.reset_index(drop=True)
-        idx = np.arange(len(ordered))
-        plt.plot(idx, ordered['effect_logit'].values, '.', ms=3)
-        plt.axhline(0, ls='--', c='k')
-        plt.xlabel('Tree Heads (sorted)'); plt.ylabel('Effect on log-odds')
-        plt.tight_layout()
-        plt.savefig(os.path.join(DATA_PATHS['img']['regression'], 'combined_model_tree_head_caterpillar.png'), dpi=150)
-        plt.close()
-    except Exception as e:
-        logger.warning(f"Caterpillar plot for tree heads failed: {e}")
-
-    # 6) text summary
-    txt = f"""
-        MAP (Ridge) Multiple-Membership Logistic (Trial-level) with Tree ID
-
-        Data:
-        - Total trials: {len(y)}
-        - Train trials: {len(y_train)} 
-        - Test trials: {len(y_test)}
-        - Test requested: {int(y_test.sum())} ({y_test.mean()*100:.1f}%)
-        - Requests (columns in W): {info_req['n_requests']}
-        - Trials with request membership: {info_req['n_with_membership']}
-        - Tree Heads (columns in W_tree): {info_tree['n_tree_heads']}
-        - Trials with tree head membership: {info_tree['n_with_membership']}
-        - Request Matrix density: {info_req['density']:.4f}
-        - Tree Head Matrix density: {info_tree['density']:.4f}
-
-        Model:
-        - Design = [X_std | W | W_tree] (sparse CSR)
-        - Penalty: L2 (Gaussian prior), solver='saga'
-        - Selected C (prior variance ~ tau^2): {C_star:.3f}
-
-        Performance (test set):
-        - AUC: {auc:.3f}
-        - Average Precision: {ap:.3f}
-        - Brier Score: {brier:.3f}
+        Model Performance:
         - Accuracy: {accuracy:.3f}
         - Precision: {precision:.3f}
         - Recall: {recall:.3f}
         - F1-Score: {f1:.3f}
+        - AUC-ROC: {auc_score:.3f}
+        - Brier Score: {brier_score:.3f}
 
-        Fixed effects (std. scale):
-        {chr(10).join([f"  {feat}: {coef:.3f} (OR={np.exp(coef):.3f})" for feat, coef in zip(features, beta_fixed)])}
+        Feature Coefficients:
+        - Data Completeness: {log_reg.coef_[0][0]:.3f}
+        - Number of Qualifiers: {log_reg.coef_[0][1]:.3f}
+        - Log Enrollment: {log_reg.coef_[0][2]:.3f}
+        - Intercept: {log_reg.intercept_[0]:.3f}
 
-        Files saved:
-        - Fixed effects: mm_map_tree_id_fixed_effects.csv
-        - Request effects: mm_map_tree_id_request_effects_full.csv (with top/bottom 30 CSVs)
-        - Tree head effects: mm_map_tree_id_effects_full.csv (with top/bottom 30 CSVs)
-        """
-    save_results(txt, os.path.join(DATA_PATHS['results'], 'combined_model_summary.txt'))
+        Interpretation:
+        - Higher completeness {"increases" if log_reg.coef_[0][0] > 0 else "decreases"} request probability
+        - More qualifiers {"increase" if log_reg.coef_[0][1] > 0 else "decrease"} request probability  
+        - Larger enrollment {"increases" if log_reg.coef_[0][2] > 0 else "decreases"} request probability
 
-    logger.info("MAP (ridge) multilevel logistic regression with tree_id finished")
+        Confusion Matrix:
+        {conf_matrix}
 
-    train_sizes, train_scores, test_scores = learning_curve(
-        clf, X_design_train, y_train,
-        cv=5, scoring="roc_auc", n_jobs=-1,
-        train_sizes=np.linspace(0.1, 1.0, 5)
-    )
-    plt.plot(train_sizes, train_scores.mean(axis=1), label="train AUC")
-    plt.plot(train_sizes, test_scores.mean(axis=1), label="cv AUC")
-    plt.savefig(os.path.join(DATA_PATHS['img']['regression'], 'combined_model_learning_curve.png'), dpi=150)
-    plt.close()
+        Classification Report:
+        {classification_report(y, y_pred)}
+    """
 
-    return clf, model_results, {'scaler': scaler, 'req_index': req_index, 'tree_index': tree_index, 'info_req': info_req, 'info_tree': info_tree}
+    performance_path = os.path.join(DATA_PATHS['results'], 'baseline_performance_summary.txt')
+    save_results(performance_summary, performance_path)
+    logger.info(f"Saved performance summary to {performance_path}")
+
+    logger.info("Baseline logistic regression analysis completed with visualizations")
     
+    return result, model_results
+
+def sequential_mm_logistic_models(
+        logger=None,
+        db: SQL_DatabaseManager=None,
+        plotter: MasterPlotter=None,
+        random_state=42,
+        test_size=0.3):
+    """
+    Fit three nested multilevel (multiple-membership) logistic regression models:
+      M1: qualifier
+      M2: qualifier + tree_number
+      M3: qualifier + tree_number + document_count + completeness_percentage
+    Each includes request-level random intercept approximation via membership matrix W.
+    Outputs:
+      - Betas for fixed effects
+      - N train / N test / positives in test
+      - Log-likelihood (test set)
+      - AIC / BIC (using test set logLik)
+      - DataFrame summary saved to results/sequential_mm_models_summary.csv
+    """
+    if logger is None:
+        setup_logging(mode='basic')
+        logger = logging.getLogger(__name__)
+    logger.info("Starting sequential multilevel logistic regression models")
+
+    if db is None:
+        db = SQL_DatabaseManager(db_config=MY_DB_CONFIG, connection_name='my_database')
+    if plotter is None:
+        plotter = MasterPlotter()
+
+    # Collect data
+    merged_data, request_links = data_collection(logger, db, plotter)
+    if merged_data is None or merged_data.empty:
+        logger.error("No merged data for sequential models")
+        return
+
+    # Target
+    merged_data['requested'] = merged_data['nct_id'].isin(request_links['nct_id']).astype(int)
+
+    base_cols = ['nct_id', 'requested', 'qualifier', 'tree_number',
+                 'document_count', 'completeness_percentage', 'enrollment']
+    df = merged_data[base_cols].dropna(subset=['qualifier', 'tree_number',
+                                               'requested', 'enrollment',
+                                               'document_count',
+                                               'completeness_percentage'])
+    df = df[df['enrollment'] > 0]
+    df['log_enrollment'] = np.log1p(df['enrollment'])  # retained if needed later
+
+    # Build request membership matrix (random effects proxy)
+    W, req_index, info_req = build_weight_matrix(df, request_links, logger)
+
+    # Model specifications
+    model_specs = [
+        ("M1_qualifier",              ['qualifier']),
+        ("M2_qualifier_tree",         ['qualifier', 'tree_number']),
+        ("M3_full",                   ['qualifier', 'tree_number',
+                                       'document_count', 'completeness_percentage'])
+    ]
+
+    rows = []
+    os.makedirs(DATA_PATHS['results'], exist_ok=True)
+
+    for model_name, feature_list in model_specs:
+        logger.info(f"Fitting {model_name} with features: {feature_list}")
+
+        X = df[feature_list].to_numpy(dtype=np.float32)
+        y = df['requested'].to_numpy(dtype=np.int32)
+
+        scaler = StandardScaler()
+        Xs = scaler.fit_transform(X).astype(np.float32)
+
+        # Split
+        X_train, X_test, y_train, y_test, W_train, W_test = train_test_split(
+            Xs, y, W, test_size=test_size, stratify=y, random_state=random_state
+        )
+
+        # Design matrices
+        X_train_sp = sparse.csr_matrix(X_train)
+        X_test_sp = sparse.csr_matrix(X_test)
+        X_design_train = sparse.hstack([X_train_sp, W_train], format='csr')
+        X_design_test = sparse.hstack([X_test_sp, W_test], format='csr')
+
+        # Fit penalized logistic (multiple-membership)
+        Cs = np.array([0.01, 0.03, 0.1, 0.3, 1.0])
+        cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=random_state)
+        clf = LogisticRegressionCV(
+            Cs=Cs, cv=cv, solver="saga", penalty="l2", scoring="neg_log_loss",
+            max_iter=5000, n_jobs=-1, fit_intercept=True, class_weight="balanced", refit=True
+        )
+        clf.fit(X_design_train, y_train)
+        C_star = float(clf.C_[0])
+
+        # Predictions & metrics (test)
+        p_test = clf.predict_proba(X_design_test)[:, 1]
+        ll_test = _log_likelihood_binary(y_test, p_test)
+        k_params = clf.coef_.shape[1] + 1  # coefficients + intercept
+        N_test = len(y_test)
+        aic = 2 * k_params - 2 * ll_test
+        bic = k_params * np.log(N_test) - 2 * ll_test
+        auc = roc_auc_score(y_test, p_test)
+        brier = brier_score_loss(y_test, p_test)
+
+        # Extract fixed effect betas
+        p_fixed = len(feature_list)
+        coef_all = clf.coef_.ravel()
+        beta_fixed = coef_all[:p_fixed]
+
+        # Store row
+        row = {
+            'model': model_name,
+            'features': '|'.join(feature_list),
+            'n_train': len(y_train),
+            'n_test': N_test,
+            'test_requested': int(y_test.sum()),
+            'test_requested_pct': y_test.mean() * 100.0,
+            'log_likelihood_test': ll_test,
+            'AIC_test': aic,
+            'BIC_test': bic,
+            'AUC_test': auc,
+            'Brier_test': brier,
+            'C_selected': C_star
+        }
+        # Add betas
+        for f, b in zip(feature_list, beta_fixed):
+            row[f'beta_{f}'] = b
+            row[f'OR_{f}'] = np.exp(b)
+        rows.append(row)
+
+        # Save per-model coefficient table
+        coef_df = pd.DataFrame({
+            'feature': feature_list,
+            'beta': beta_fixed,
+            'OR': np.exp(beta_fixed)
+        })
+        coef_df.to_csv(os.path.join(
+            DATA_PATHS['results'],
+            f'{model_name}_fixed_effects.csv'
+        ), index=False)
+
+        # Quick text summary
+        summary_txt = f"""
+        {model_name} Multilevel Logistic Regression
+        -------------------------------------------
+        Features: {feature_list}
+        Train N: {len(y_train)}
+        Test N: {N_test}
+        Test positives: {int(y_test.sum())} ({y_test.mean()*100:.2f}%)
+        Log-Likelihood (test): {ll_test:.3f}
+        AIC (test): {aic:.3f}
+        BIC (test): {bic:.3f}
+        AUC (test): {auc:.3f}
+        Brier (test): {brier:.3f}
+        Selected C: {C_star:.3f}
+        Betas (std scale):
+        {chr(10).join([f'  {f}: {b:.4f} (OR={np.exp(b):.4f})' for f, b in zip(feature_list, beta_fixed)])}
+        """
+        save_results(summary_txt,
+                     os.path.join(DATA_PATHS['results'],
+                                  f'{model_name}_summary.txt'))
+
+    # Combined summary
+    out_df = pd.DataFrame(rows)
+    out_df.to_csv(os.path.join(DATA_PATHS['results'],
+                               'sequential_mm_models_summary.csv'),
+                  index=False)
+    logger.info("Sequential multilevel models completed and summary saved.")
+    return out_df
+
+def _log_likelihood_binary(y_true: np.ndarray, p: np.ndarray) -> float:
+    """Exact log-likelihood for Bernoulli logistic model."""
+    eps = 1e-12
+    p = np.clip(p, eps, 1 - eps)
+    return float(np.sum(y_true * np.log(p) + (1 - y_true) * np.log(1 - p)))
+
 def runner():
     """Main runner function to execute analyses."""
     setup_logging(mode='basic')
@@ -2101,10 +2104,8 @@ def runner():
     req_multi_vs_single_trial(logger, db, plotting)
     baseline_analysis(logger, db, plotting)
     multilevel_logistic_regression(logger, db, plotting)
-    multilevel_logistic_regression_best_features(logger, db, plotting)  # Add this line
-    mm_log_reg_only_enrollment_tree_number(logger, db, plotting)
-    multilevel_logistic_regression_with_tree_id(logger, db, plotting)
-    multilevel_logistic_regression_with_tree_id_weight_and_request_weights(logger, db, plotting)
+
+    sequential_mm_logistic_models(logger, db, plotting)  # <-- added
     
     logger.info("Script finished")
 
